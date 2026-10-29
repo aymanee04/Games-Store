@@ -1,0 +1,98 @@
+@host = http://localhost:5080
+
+### Health
+GET {{host}}/health
+
+### All genres
+GET {{host}}/api/genres
+
+### Create genre
+POST {{host}}/api/genres
+Content-Type: application/json
+
+{ "name": "Strategy" }
+
+### All studios
+GET {{host}}/api/studios
+
+### Studio by id
+GET {{host}}/api/studios/1
+
+### Create studio
+POST {{host}}/api/studios
+Content-Type: application/json
+
+{ "name": "Ubisoft" }
+
+### Update studio
+PUT {{host}}/api/studios/1
+Content-Type: application/json
+
+{ "name": "Capcom" }
+
+### Delete studio
+DELETE {{host}}/api/studios/1
+
+### Validation error example (400 ProblemDetails)
+POST {{host}}/api/studios
+Content-Type: application/json
+
+{ "name": "" }
+
+### Games (paged, filtered)
+GET {{host}}/api/games?page=1&pageSize=5&search=fi
+
+### Game by id
+GET {{host}}/api/games/4
+
+### Create game
+POST {{host}}/api/games
+Content-Type: application/json
+
+{ "name": "Age of Empires IV", "genreId": 1, "studioId": 1, "price": 49.99, "releaseDate": "2021-10-28" }
+
+### Update game
+PUT {{host}}/api/games/1
+Content-Type: application/json
+
+{ "name": "Street Fighter II Turbo", "genreId": 1, "studioId": 1, "price": 24.99, "releaseDate": "1992-07-16" }
+
+### Delete game
+DELETE {{host}}/api/games/9
+
+### Validation error example (400 ProblemDetails)
+POST {{host}}/api/games
+Content-Type: application/json
+
+{ "name": "", "genreId": 0, "studioId": 0, "price": -5, "releaseDate": "2021-10-28" }
+
+### Authentication
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "Email": "admin@gamestore.local", "Password": "@Admin2004" }
+
+### Login 
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "Email": "john.doe@example.com", "Password": "Password123!" }
+
+#### Register
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{ "UserName": "aymane", "Email": "aymane@example.com", "Password": "Password123!" }
+
+#### Refresh token
+POST {{host}}/api/auth/refresh
+Content-Type: application/json
+
+{ "RefreshToken": "co05Po1pG9B7vyECut1JhAZT10IC4onr5p4vvXWkj1e5ct8FzYCE0s9HYpiRAnu43LCzv-keCwfdzI1_pvBiZw" }
+
+#### Logout
+POST {{host}}/api/auth/logout
+Content-Type: application/json
+
+{ "RefreshToken": "k_jLTezaqE7cXBxAkUchs1r-8sTNfoSgR-2s68dyyVS3_NxEn6NgliAqkDQ2XUhdBze5mKYbQTfCMT62SAsnjg" }
+
