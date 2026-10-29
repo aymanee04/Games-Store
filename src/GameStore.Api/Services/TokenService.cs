@@ -21,7 +21,7 @@ public class TokenService(IConfiguration configuration) : ITokenService
         var audience = configuration["Jwt:Audience"]
                        ?? "GameStore.Api";
         
-        var accessTokenMinutes = configuration.GetValue<int?>("Jwt:AccessTokenMinutes") ?? 60;
+        var accessTokenMinutes = configuration.GetValue<int?>("Jwt:AccessTokenMinutes") ?? 15;
 
         var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
         var credentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);

@@ -14,7 +14,7 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("GameStoreDb")
+        var connectionString = configuration.GetConnectionString("GameStore")
             ?? throw new InvalidOperationException(
                 "Connection string 'GameStoreDb' is missing. Set ConnectionStrings:GameStoreDb (user-secrets or env var).");
 
@@ -26,6 +26,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IStudioService, StudioService>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAuthService, AuthService>();
+        
+        // services.AddSingleton<TimeProvider>(TimeProvider.System);
+
 
         services.AddIdentityCore<ApplicationUser>(o =>
             {
@@ -37,7 +40,7 @@ public static class ServiceCollectionExtensions
             .AddRoles<IdentityRole>()
             .AddEntityFrameworkStores<AppDbContext>()
             .AddSignInManager();
-
+        
         services.AddAuthentication(options =>
             {
                 options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;

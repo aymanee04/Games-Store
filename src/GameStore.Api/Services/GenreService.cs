@@ -29,12 +29,7 @@ public class GenreService(AppDbContext db, ILogger<GenreService> logger) : IGenr
     public async Task<GenreDto> CreateAsync(CreateGenreRequest request, CancellationToken ct)
     {
         var name = request.Name.Trim();
-
-        if (await db.Genres.AnyAsync(g => g.Name == name, ct))
-        {
-            throw new ConflictException($"Genre '{name}' already exists.");
-        }
-
+        
         var genre = new Genre { Name = name };
         db.Genres.Add(genre);
         await db.SaveChangesAsync(ct);

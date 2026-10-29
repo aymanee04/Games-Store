@@ -3,6 +3,7 @@ using GameStore.Api.Dtos;
 using GameStore.Api.Entities;
 using GameStore.Api.Exceptions;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace GameStore.Api.Services;
 
@@ -40,7 +41,7 @@ public class StudioService(AppDbContext db, ILogger<StudioService> logger) : ISt
         {
             await db.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23505")
         {
             throw new ConflictException($"Studio '{name}' already exists.");
         }

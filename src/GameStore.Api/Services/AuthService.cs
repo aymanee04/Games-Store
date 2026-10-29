@@ -37,7 +37,13 @@ public class AuthService(
             throw new BadRequestException(string.Join(" ", result.Errors.Select(e => e.Description)));
         }
 
-        await userManager.AddToRoleAsync(user, "User");
+        var roleResult = await userManager.AddToRoleAsync(user, "User");
+
+        if (!roleResult.Succeeded)
+        {
+            throw new BadRequestException(string.Join(" ", roleResult.Errors.Select(e => e.Description)));
+        }
+        
 
         var now = UtcNow();
         var roles = await userManager.GetRolesAsync(user);
@@ -142,45 +148,57 @@ public class AuthService(
             throw new UnauthorizedException("Account temporarily locked.");
         }
 
-        // Atomic claim: only one concurrent request can revoke this exact token from null -> now.
-        var claimed = await db.RefreshTokens
-            .Where(t => t.Id == stored.Id && t.RevokedAtUtc == null)
-            .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAtUtc, now), ct);
-
-        if (claimed == 0)
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        try
         {
-            await RevokeFamilyAsync(stored.FamilyId, now, ct);
-            throw new UnauthorizedException("Invalid refresh token.");
+            // Atomic claim: only one concurrent request can flip null -> now.
+            var claimed = await db.RefreshTokens
+                .Where(t => t.Id == stored.Id && t.RevokedAtUtc == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAtUtc, now), ct);
+
+            if (claimed == 0)
+            {
+                await RevokeFamilyAsync(stored.FamilyId, now, ct);
+                await tx.CommitAsync(ct); // persist family revocation
+                throw new UnauthorizedException("Invalid refresh token.");
+            }
+
+            var roles = await userManager.GetRolesAsync(stored.User);
+            var accessToken = tokenService.CreateAccessToken(stored.User, roles);
+
+            var newRawRefreshToken = tokenService.GenerateRefreshToken();
+            var newRefreshTokenHash = tokenService.HashToken(newRawRefreshToken);
+
+            // Link old -> new within same transaction.
+            await db.RefreshTokens
+                .Where(t => t.Id == stored.Id)
+                .ExecuteUpdateAsync(
+                    s => s.SetProperty(t => t.ReplacedByTokenHash, newRefreshTokenHash),
+                    ct);
+
+            db.RefreshTokens.Add(new RefreshToken
+            {
+                UserId = stored.UserId,
+                TokenHash = newRefreshTokenHash,
+                FamilyId = stored.FamilyId,
+                CreatedAtUtc = now,
+                ExpiresAtUtc = now.AddDays(RefreshTokenDays)
+            });
+
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+
+            return new AuthResponse(
+                AccessToken: accessToken,
+                AccessTokenExpiresAtUtc: now.AddMinutes(GetAccessTokenMinutes()),
+                RefreshToken: newRawRefreshToken,
+                RefreshTokenExpiresAtUtc: now.AddDays(RefreshTokenDays));
         }
-
-        var roles = await userManager.GetRolesAsync(stored.User);
-        var accessToken = tokenService.CreateAccessToken(stored.User, roles);
-
-        var newRawRefreshToken = tokenService.GenerateRefreshToken();
-        var newRefreshTokenHash = tokenService.HashToken(newRawRefreshToken);
-
-        await db.RefreshTokens
-            .Where(t => t.Id == stored.Id)
-            .ExecuteUpdateAsync(
-                s => s.SetProperty(t => t.ReplacedByTokenHash, newRefreshTokenHash),
-                ct);
-
-        db.RefreshTokens.Add(new RefreshToken
+        catch
         {
-            UserId = stored.UserId,
-            TokenHash = newRefreshTokenHash,
-            FamilyId = stored.FamilyId,
-            CreatedAtUtc = now,
-            ExpiresAtUtc = now.AddDays(RefreshTokenDays)
-        });
-
-        await db.SaveChangesAsync(ct);
-
-        return new AuthResponse(
-            AccessToken: accessToken,
-            AccessTokenExpiresAtUtc: now.AddMinutes(GetAccessTokenMinutes()),
-            RefreshToken: newRawRefreshToken,
-            RefreshTokenExpiresAtUtc: now.AddDays(RefreshTokenDays));
+            await tx.RollbackAsync(ct);
+            throw;
+        }
     }
 
     public async Task LogoutAsync(LogoutRequest request, CancellationToken ct)

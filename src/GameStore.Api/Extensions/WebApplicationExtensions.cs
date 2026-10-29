@@ -15,12 +15,19 @@ public static class WebApplicationExtensions
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
         await db.Database.MigrateAsync();
+        
+        string[] requiredRoles = ["User", "Admin"];
 
-        foreach (var roleName in new[] { "Admin", "User" })
+        foreach (var roleName in requiredRoles)
         {
             if (!await roleManager.RoleExistsAsync(roleName))
             {
-                await roleManager.CreateAsync(new IdentityRole(roleName));
+                var result = await roleManager.CreateAsync(new IdentityRole(roleName));
+                if (!result.Succeeded)
+                {
+                    throw new InvalidOperationException(
+                        $"Failed to initialize required role '{roleName}': {string.Join(", ", result.Errors.Select(e => e.Description))}");
+                }
             }
         }
 
