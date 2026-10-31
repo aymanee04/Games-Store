@@ -3,6 +3,7 @@ using GameStore.Api.Dtos;
 using GameStore.Api.Entities;
 using GameStore.Api.Exceptions;
 using Microsoft.EntityFrameworkCore;
+using Npgsql; // Required for PostgresException
 
 namespace GameStore.Api.Services;
 
@@ -37,7 +38,15 @@ public class GenreService(AppDbContext db, ILogger<GenreService> logger) : IGenr
 
         var genre = new Genre { Name = name };
         db.Genres.Add(genre);
-        await db.SaveChangesAsync(ct);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        {
+            throw new ConflictException($"Genre '{name}' already exists.");
+        }
 
         logger.LogInformation("Created genre {GenreId} ({GenreName})", genre.Id, genre.Name);
         return new GenreDto(genre.Id, genre.Name);
@@ -56,7 +65,15 @@ public class GenreService(AppDbContext db, ILogger<GenreService> logger) : IGenr
         }
 
         genre.Name = name;
-        await db.SaveChangesAsync(ct);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        {
+            throw new ConflictException($"Genre '{name}' already exists.");
+        }
     }
 
     public async Task DeleteAsync(int id, CancellationToken ct)
@@ -71,5 +88,10 @@ public class GenreService(AppDbContext db, ILogger<GenreService> logger) : IGenr
 
         db.Genres.Remove(genre);
         await db.SaveChangesAsync(ct);
+    }
+    
+    private static bool IsUniqueConstraintViolation(DbUpdateException ex)
+    {
+        return ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23505";
     }
 }

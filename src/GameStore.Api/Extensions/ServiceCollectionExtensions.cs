@@ -63,7 +63,6 @@ public static class ServiceCollectionExtensions
         services.AddAuthorization();
 
         services.AddControllers();
-        services.AddOpenApi();
 
         services.AddProblemDetails();
         services.AddExceptionHandler<GlobalExceptionHandler>();

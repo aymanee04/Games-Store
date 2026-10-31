@@ -8,7 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace GameStore.Api.Services;
 
-public class TokenService(IConfiguration configuration) : ITokenService
+public class TokenService(IConfiguration configuration, TimeProvider timeProvider) : ITokenService
 {
     public string CreateAccessToken(ApplicationUser user, IList<string> roles)
     {
@@ -42,7 +42,7 @@ public class TokenService(IConfiguration configuration) : ITokenService
             issuer: issuer,
             audience: audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(accessTokenMinutes),
+            expires: timeProvider.GetUtcNow().AddMinutes(accessTokenMinutes).UtcDateTime,
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);

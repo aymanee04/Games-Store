@@ -41,7 +41,7 @@ public class StudioService(AppDbContext db, ILogger<StudioService> logger) : ISt
         {
             await db.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23505")
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
         {
             throw new ConflictException($"Studio '{name}' already exists.");
         }
@@ -53,18 +53,27 @@ public class StudioService(AppDbContext db, ILogger<StudioService> logger) : ISt
     public async Task UpdateAsync(int id, UpdateStudioRequest request, CancellationToken ct)
     {
         var studio = await db.Studios.FindAsync([id], ct)
-            ?? throw new NotFoundException(nameof(Studio), id);
+                     ?? throw new NotFoundException(nameof(Studio), id);
 
         var name = request.Name.Trim();
 
+        // Optional: Keep the fast pre-check to catch most cases early
         if (await db.Studios.AnyAsync(s => s.Name == name && s.Id != id, ct))
         {
             throw new ConflictException($"Studio '{name}' already exists.");
         }
 
         studio.Name = name;
-        await db.SaveChangesAsync(ct);
-        logger.LogInformation("Updated Studio {StudioId} ({StudioName})", studio.Id, studio.Name);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            logger.LogInformation("Updated Studio {StudioId} ({StudioName})", studio.Id, studio.Name);
+        }
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        {
+            throw new ConflictException($"Studio '{name}' already exists.");
+        }
     }
 
     public async Task DeleteAsync(int id, CancellationToken ct)
@@ -79,5 +88,10 @@ public class StudioService(AppDbContext db, ILogger<StudioService> logger) : ISt
 
         db.Studios.Remove(studio);
         await db.SaveChangesAsync(ct);
+    }
+
+    private static bool IsUniqueConstraintViolation(DbUpdateException ex)
+    {
+        return ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23505";
     }
 }
