@@ -12,8 +12,8 @@ public class TokenService(IConfiguration configuration) : ITokenService
 {
     public string CreateAccessToken(ApplicationUser user, IList<string> roles)
     {
-        var jwtKey = configuration["Jwt:Key"]
-                     ?? throw new InvalidOperationException("Jwt:Key configuration is missing.");
+        var jwtKey = configuration["JWT_KEY"]
+                     ?? throw new InvalidOperationException("JWT_KEY configuration is missing.");
 
         var issuer = configuration["Jwt:Issuer"]
                      ?? "GameStore.Api";

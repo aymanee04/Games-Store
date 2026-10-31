@@ -7,7 +7,7 @@ GameStore API is a RESTful backend application for managing video games, genres,
 The project focuses on learning modern .NET backend development, REST API design, database management, authentication, security fundamentals, and clean separation of responsibilities.
 
 ## Features
-
+[docker-compose.yml](docker-compose.yml)
 ### Game management
 - Create, retrieve, update, and delete games.
 - Retrieve games using pagination.

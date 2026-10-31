@@ -14,10 +14,9 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("GameStore")
-            ?? throw new InvalidOperationException(
-                "Connection string 'GameStoreDb' is missing. Set ConnectionStrings:GameStoreDb (user-secrets or env var).");
-
+        var connectionString = configuration["CONN_STRING"]
+                               ?? throw new InvalidOperationException(
+                                   "CONN_STRING environment variable is missing.");
         // AddDbContext registers AppDbContext as Scoped (one instance per HTTP request).
         services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
 
@@ -27,7 +26,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAuthService, AuthService>();
         
-        // services.AddSingleton<TimeProvider>(TimeProvider.System);
+        services.AddSingleton<TimeProvider>(TimeProvider.System);
 
 
         services.AddIdentityCore<ApplicationUser>(o =>
@@ -57,7 +56,7 @@ public static class ServiceCollectionExtensions
                     ValidIssuer = configuration["Jwt:Issuer"] ?? "GameStore.Api",
                     ValidAudience = configuration["Jwt:Audience"] ?? "GameStore.Api",
                     IssuerSigningKey = new SymmetricSecurityKey(
-                        Encoding.UTF8.GetBytes(configuration["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key configuration is missing.")))
+                        Encoding.UTF8.GetBytes(configuration["JWT_KEY"] ?? throw new InvalidOperationException("JWT_KEY configuration is missing.")))
                 };
             });
 
