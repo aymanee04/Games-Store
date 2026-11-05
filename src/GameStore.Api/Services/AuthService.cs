@@ -1,5 +1,5 @@
 ﻿using GameStore.Api.Data;
-using GameStore.Api.Dtos;
+using GameStore.Shared.Dtos;
 using GameStore.Api.Entities;
 using GameStore.Api.Exceptions;
 using Microsoft.AspNetCore.Identity;
@@ -19,56 +19,66 @@ public class AuthService(
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken ct)
     {
-        var user = new ApplicationUser
-        {
-            UserName = request.UserName,
-            Email = request.Email
-        };
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-        var result = await userManager.CreateAsync(user, request.Password);
-
-        if (!result.Succeeded)
+        try
         {
-            if (result.Errors.Any(e => e.Code is "DuplicateUserName" or "DuplicateEmail"))
+            var user = new ApplicationUser
             {
-                throw new ConflictException("A user with this email or username already exists.");
+                UserName = request.UserName,
+                Email = request.Email
+            };
+            
+            var result = await userManager.CreateAsync(user, request.Password);
+
+            if (!result.Succeeded)
+            {
+                if (result.Errors.Any(e => e.Code is "DuplicateUserName" or "DuplicateEmail"))
+                {
+                    throw new ConflictException("A user with this email or username already exists.");
+                }
+
+                throw new BadRequestException(string.Join(" ", result.Errors.Select(e => e.Description)));
             }
 
-            throw new BadRequestException(string.Join(" ", result.Errors.Select(e => e.Description)));
+            var roleResult = await userManager.AddToRoleAsync(user, "User");
+
+            if (!roleResult.Succeeded)
+            {
+                throw new BadRequestException(string.Join(" ", roleResult.Errors.Select(e => e.Description)));
+            }
+
+
+            var now = UtcNow();
+            var roles = await userManager.GetRolesAsync(user);
+            var accessToken = tokenService.CreateAccessToken(user, roles);
+
+            var rawRefreshToken = tokenService.GenerateRefreshToken();
+            var refreshTokenHash = tokenService.HashToken(rawRefreshToken);
+            var familyId = Guid.NewGuid();
+
+            db.RefreshTokens.Add(new RefreshToken
+            {
+                UserId = user.Id,
+                TokenHash = refreshTokenHash,
+                FamilyId = familyId,
+                CreatedAtUtc = now,
+                ExpiresAtUtc = now.AddDays(RefreshTokenDays)
+            });
+
+            await db.SaveChangesAsync(ct);
+
+            return new AuthResponse(
+                AccessToken: accessToken,
+                AccessTokenExpiresAtUtc: now.AddMinutes(GetAccessTokenMinutes()),
+                RefreshToken: rawRefreshToken,
+                RefreshTokenExpiresAtUtc: now.AddDays(RefreshTokenDays));
         }
-
-        var roleResult = await userManager.AddToRoleAsync(user, "User");
-
-        if (!roleResult.Succeeded)
+        catch
         {
-            throw new BadRequestException(string.Join(" ", roleResult.Errors.Select(e => e.Description)));
+            await transaction.RollbackAsync(ct);
+            throw;
         }
-        
-
-        var now = UtcNow();
-        var roles = await userManager.GetRolesAsync(user);
-        var accessToken = tokenService.CreateAccessToken(user, roles);
-
-        var rawRefreshToken = tokenService.GenerateRefreshToken();
-        var refreshTokenHash = tokenService.HashToken(rawRefreshToken);
-        var familyId = Guid.NewGuid();
-
-        db.RefreshTokens.Add(new RefreshToken
-        {
-            UserId = user.Id,
-            TokenHash = refreshTokenHash,
-            FamilyId = familyId,
-            CreatedAtUtc = now,
-            ExpiresAtUtc = now.AddDays(RefreshTokenDays)
-        });
-
-        await db.SaveChangesAsync(ct);
-
-        return new AuthResponse(
-            AccessToken: accessToken,
-            AccessTokenExpiresAtUtc: now.AddMinutes(GetAccessTokenMinutes()),
-            RefreshToken: rawRefreshToken,
-            RefreshTokenExpiresAtUtc: now.AddDays(RefreshTokenDays));
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken ct)
@@ -117,7 +127,7 @@ public class AuthService(
             RefreshTokenExpiresAtUtc: now.AddDays(RefreshTokenDays));
     }
     
-public async Task<AuthResponse> RefreshAsync(RefreshRequest request, CancellationToken ct)
+    public async Task<AuthResponse> RefreshAsync(RefreshRequest request, CancellationToken ct)
 {
     var now = UtcNow();
     var incomingHash = tokenService.HashToken(request.RefreshToken);

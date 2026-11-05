@@ -1,4 +1,4 @@
-using GameStore.Api.Dtos;
+using GameStore.Shared.Dtos;
 
 namespace GameStore.Api.Services;
 

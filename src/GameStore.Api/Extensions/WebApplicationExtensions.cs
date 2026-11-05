@@ -30,7 +30,7 @@ public static class WebApplicationExtensions
                 }
             }
         }
-
+        
         var seedEmail = app.Configuration["SeedAdmin:Email"];
         var seedPassword = app.Configuration["SeedAdmin:Password"];
 
@@ -59,7 +59,14 @@ public static class WebApplicationExtensions
                     $"Failed to seed admin user: {string.Join(", ", result.Errors.Select(e => e.Description))}");
             }
 
-            await userManager.AddToRoleAsync(adminUser, "Admin");
+            var roleResult = await userManager.AddToRoleAsync(adminUser, "Admin");
+
+            if (!roleResult.Succeeded)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to assign Admin role: {string.Join(", ", roleResult.Errors.Select(e => e.Description))}");
+            }
+            
         }
 
         await DbSeeder.SeedAsync(db);

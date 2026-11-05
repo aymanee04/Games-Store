@@ -1,0 +1,37 @@
+﻿@page "/games"
+@using GameStore.Shared.Dtos
+@inject HttpClient Http
+
+<PageTitle>Games</PageTitle>
+<h1>Games</h1>
+
+@if (_result is null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <ul>
+        @foreach (var game in _result.Items)
+        {
+            <li>@game.Name</li>
+        }
+    </ul>
+
+    <button @onclick="Previous" disabled="@(_page <= 1)">Previous</button>
+    <span>Page @_page of @_result.TotalPages</span>
+    <button @onclick="Next" disabled="@(_page >= _result.TotalPages)">Next</button>
+}
+
+@code {
+    private PagedResult<GameDto>? _result;
+    private int _page = 1;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load() =>
+        _result = await Http.GetFromJsonAsync<PagedResult<GameDto>>($"http://localhost:5080/api/games?page={_page}&pageSize=2");
+
+    private async Task Next()     { _page++; await Load(); }
+    private async Task Previous() { _page--; await Load(); }
+}

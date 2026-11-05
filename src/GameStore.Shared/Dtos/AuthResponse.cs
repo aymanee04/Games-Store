@@ -1,15 +1,16 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using GameStore.Api.validations;
 
 namespace GameStore.Api.Dtos;
 
 public record RegisterRequest(
-    [Required, StringLength(50, MinimumLength = 3)] string UserName,
-    [Required, EmailAddress] string Email,
-    [Required] string Password);
+    [Required, StringLength(50, MinimumLength = 3), NoWhitespace] string UserName,
+    [Required, EmailAddress, NoWhitespace] string Email,
+    [Required, NoWhitespace, MinLength(6), MaxLength(50)] string Password);
 
 public record LoginRequest(
-    [Required] string Email,
-    [Required] string Password);
+    [Required, EmailAddress, NoWhitespace] string Email,
+    [Required, NoWhitespace, MinLength(6), MaxLength(50)] string Password);
 
 public record AuthResponse(
     string AccessToken, DateTime AccessTokenExpiresAtUtc,

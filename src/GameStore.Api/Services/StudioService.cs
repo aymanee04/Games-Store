@@ -1,5 +1,5 @@
 using GameStore.Api.Data;
-using GameStore.Api.Dtos;
+using GameStore.Shared.Dtos;
 using GameStore.Api.Entities;
 using GameStore.Api.Exceptions;
 using Microsoft.EntityFrameworkCore;
@@ -28,7 +28,7 @@ public class StudioService(AppDbContext db, ILogger<StudioService> logger) : ISt
 
     public async Task<StudioDtos> CreateAsync(CreateStudioRequest request, CancellationToken ct)
     {
-        var name = request.Name.Trim();
+        var name = request.Name.Trim().ToLowerInvariant();
 
         if (await db.Studios.AnyAsync(s => s.Name == name, ct))
         {
@@ -41,7 +41,10 @@ public class StudioService(AppDbContext db, ILogger<StudioService> logger) : ISt
         {
             await db.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        catch (DbUpdateException ex)
+            when (ex.InnerException is PostgresException pgEx
+                  && pgEx.SqlState == PostgresErrorCodes.UniqueViolation
+                  && pgEx.ConstraintName == "IX_Studios_Name")
         {
             throw new ConflictException($"Studio '{name}' already exists.");
         }
@@ -55,7 +58,7 @@ public class StudioService(AppDbContext db, ILogger<StudioService> logger) : ISt
         var studio = await db.Studios.FindAsync([id], ct)
                      ?? throw new NotFoundException(nameof(Studio), id);
 
-        var name = request.Name.Trim();
+        var name = request.Name.Trim().ToLowerInvariant();
 
         // Optional: Keep the fast pre-check to catch most cases early
         if (await db.Studios.AnyAsync(s => s.Name == name && s.Id != id, ct))
@@ -70,7 +73,10 @@ public class StudioService(AppDbContext db, ILogger<StudioService> logger) : ISt
             await db.SaveChangesAsync(ct);
             logger.LogInformation("Updated Studio {StudioId} ({StudioName})", studio.Id, studio.Name);
         }
-        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        catch (DbUpdateException ex)
+            when (ex.InnerException is PostgresException pgEx
+                  && pgEx.SqlState == PostgresErrorCodes.UniqueViolation
+                  && pgEx.ConstraintName == "IX_Studios_Name")
         {
             throw new ConflictException($"Studio '{name}' already exists.");
         }
@@ -88,10 +94,5 @@ public class StudioService(AppDbContext db, ILogger<StudioService> logger) : ISt
 
         db.Studios.Remove(studio);
         await db.SaveChangesAsync(ct);
-    }
-
-    private static bool IsUniqueConstraintViolation(DbUpdateException ex)
-    {
-        return ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23505";
     }
 }

@@ -1,5 +1,5 @@
 using GameStore.Api.Data;
-using GameStore.Api.Dtos;
+using GameStore.Shared.Dtos;
 using GameStore.Api.Entities;
 using GameStore.Api.Exceptions;
 using Microsoft.EntityFrameworkCore;
@@ -25,10 +25,18 @@ public class GameService(AppDbContext db, ILogger<GameService> logger) : IGameSe
         }
 
         var total = await query.CountAsync(ct);
-
+        
+        long offset = (long)(parameters.Page - 1) * parameters.PageSize;
+        
+        const int maxPage = 100_000; 
+        if (parameters.Page > maxPage || offset > int.MaxValue)
+        {
+            throw new BadRequestException("The requested page number is too large.");
+        }
+        
         var items = await query
             .OrderBy(g => g.Name).ThenBy(g => g.Id)
-            .Skip((parameters.Page - 1) * parameters.PageSize)
+            .Skip((int)offset)
             .Take(parameters.PageSize)
             .Select(GameMappings.Projection)
             .ToListAsync(ct);
@@ -57,7 +65,7 @@ public class GameService(AppDbContext db, ILogger<GameService> logger) : IGameSe
 
         var game = new Game
         {
-            Name = request.Name.Trim(),
+            Name = request.Name.Trim().ToLowerInvariant(),
             Genre = genre,
             Studio = studio,
             Price = request.Price,
@@ -87,7 +95,7 @@ public class GameService(AppDbContext db, ILogger<GameService> logger) : IGameSe
         }
         
         // The entity is tracked, so SaveChanges generates the UPDATE automatically.
-        game.Name = request.Name.Trim();
+        game.Name = request.Name.Trim().ToLowerInvariant();
         game.GenreId = request.GenreId;
         game.StudioId = request.StudioId;
         game.Price = request.Price;

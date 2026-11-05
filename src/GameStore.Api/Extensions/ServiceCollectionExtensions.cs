@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using GameStore.Api.AI.services;
+using Microsoft.Extensions.Options;
 
 namespace GameStore.Api.Extensions;
 
@@ -26,7 +28,22 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAuthService, AuthService>();
         
-        services.AddSingleton<TimeProvider>(TimeProvider.System);
+        services.AddSingleton(TimeProvider.System);
+        
+        services.Configure<OllamaOptions>(
+            configuration.GetSection(OllamaOptions.SectionName));
+
+        services.AddHttpClient<IOllamaService, OllamaService>((sp, client) =>
+        {
+            var options = sp.GetRequiredService<IOptions<OllamaOptions>>().Value;
+
+            client.BaseAddress = new Uri(
+                options.BaseUrl.TrimEnd('/') + "/");
+
+            client.Timeout = TimeSpan.FromMinutes(3);
+        });
+
+        services.AddScoped<IGameAssistantService, GameAssistantService>();
 
 
         services.AddIdentityCore<ApplicationUser>(o =>
@@ -53,8 +70,8 @@ public static class ServiceCollectionExtensions
                     ValidateAudience = true,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
-                    ValidIssuer = configuration["Jwt:Issuer"] ?? "GameStore.Api",
-                    ValidAudience = configuration["Jwt:Audience"] ?? "GameStore.Api",
+                    ValidIssuer = configuration["JWT_ISSUER"] ?? throw new InvalidOperationException("Jwt:Issuer configuration is missing."),
+                    ValidAudience = configuration["JWT_AUDIENCE"] ?? throw new InvalidOperationException("Jwt:Audience configuration is missing."),
                     IssuerSigningKey = new SymmetricSecurityKey(
                         Encoding.UTF8.GetBytes(configuration["JWT_KEY"] ?? throw new InvalidOperationException("JWT_KEY configuration is missing.")))
                 };

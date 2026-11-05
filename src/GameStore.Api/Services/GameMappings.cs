@@ -1,5 +1,5 @@
 using System.Linq.Expressions;
-using GameStore.Api.Dtos;
+using GameStore.Shared.Dtos;
 using GameStore.Api.Entities;
 
 namespace GameStore.Api.Services;

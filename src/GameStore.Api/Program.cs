@@ -7,8 +7,12 @@ builder.Configuration.AddEnvironmentVariables();
 builder.Services.AddApplicationServices(builder.Configuration);
 builder.Services.AddOpenApi();
 builder.Services.AddSwaggerGen();
+builder.Services.AddCors(o => o.AddPolicy("Client", p => p
+    .WithOrigins("http://localhost:5014")
+    .AllowAnyHeader()
+    .AllowAnyMethod()));
 var app = builder.Build();
-
+app.UseCors("Client");
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseAuthentication();

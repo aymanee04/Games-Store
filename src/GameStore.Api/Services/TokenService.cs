@@ -15,12 +15,12 @@ public class TokenService(IConfiguration configuration, TimeProvider timeProvide
         var jwtKey = configuration["JWT_KEY"]
                      ?? throw new InvalidOperationException("JWT_KEY configuration is missing.");
 
-        var issuer = configuration["Jwt:Issuer"]
-                     ?? "GameStore.Api";
+        var issuer = configuration["JWT_AUDIENCE"] ??
+                     throw new InvalidOperationException("Jwt:Audience configuration is missing.");
 
-        var audience = configuration["Jwt:Audience"]
-                       ?? "GameStore.Api";
-        
+        var audience = configuration["JWT_AUDIENCE"] ??
+                       throw new InvalidOperationException("Jwt:Audience configuration is missing.");
+
         var accessTokenMinutes = configuration.GetValue<int?>("Jwt:AccessTokenMinutes") ?? 15;
 
         var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));

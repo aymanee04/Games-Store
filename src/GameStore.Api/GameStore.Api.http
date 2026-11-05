@@ -96,3 +96,9 @@ Content-Type: application/json
 
 { "RefreshToken": "k_jLTezaqE7cXBxAkUchs1r-8sTNfoSgR-2s68dyyVS3_NxEn6NgliAqkDQ2XUhdBze5mKYbQTfCMT62SAsnjg" }
 
+####
+POST {{host}}/api/assistant/games/generate
+Content-Type: application/json
+
+{"prompt": "Create an action RPG game developed by Ubisoft, released in 2026, with a price of 59.99."}
+

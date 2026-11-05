@@ -1,9 +1,9 @@
 using GameStore.Api.Data;
-using GameStore.Api.Dtos;
+using GameStore.Shared.Dtos;
 using GameStore.Api.Entities;
 using GameStore.Api.Exceptions;
 using Microsoft.EntityFrameworkCore;
-using Npgsql; // Required for PostgresException
+using Npgsql;
 
 namespace GameStore.Api.Services;
 
@@ -29,7 +29,7 @@ public class GenreService(AppDbContext db, ILogger<GenreService> logger) : IGenr
 
     public async Task<GenreDto> CreateAsync(CreateGenreRequest request, CancellationToken ct)
     {
-        var name = request.Name.Trim();
+        var name = request.Name.Trim().ToLowerInvariant();
 
         if (await db.Genres.AnyAsync(g => g.Name == name, ct))
         {
@@ -43,7 +43,10 @@ public class GenreService(AppDbContext db, ILogger<GenreService> logger) : IGenr
         {
             await db.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        catch (DbUpdateException ex)
+            when (ex.InnerException is PostgresException pgEx
+                  && pgEx.SqlState == PostgresErrorCodes.UniqueViolation
+                  && pgEx.ConstraintName == "IX_Genres_Name")
         {
             throw new ConflictException($"Genre '{name}' already exists.");
         }
@@ -57,7 +60,7 @@ public class GenreService(AppDbContext db, ILogger<GenreService> logger) : IGenr
         var genre = await db.Genres.FindAsync([id], ct)
             ?? throw new NotFoundException(nameof(Genre), id);
 
-        var name = request.Name.Trim();
+        var name = request.Name.Trim().ToLowerInvariant();
 
         if (await db.Genres.AnyAsync(g => g.Name == name && g.Id != id, ct))
         {
@@ -70,7 +73,10 @@ public class GenreService(AppDbContext db, ILogger<GenreService> logger) : IGenr
         {
             await db.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        catch (DbUpdateException ex)
+            when (ex.InnerException is PostgresException pgEx
+                  && pgEx.SqlState == PostgresErrorCodes.UniqueViolation
+                  && pgEx.ConstraintName == "IX_Genres_Name")
         {
             throw new ConflictException($"Genre '{name}' already exists.");
         }
@@ -88,10 +94,5 @@ public class GenreService(AppDbContext db, ILogger<GenreService> logger) : IGenr
 
         db.Genres.Remove(genre);
         await db.SaveChangesAsync(ct);
-    }
-    
-    private static bool IsUniqueConstraintViolation(DbUpdateException ex)
-    {
-        return ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23505";
     }
 }
