@@ -1,4 +1,4 @@
-﻿namespace GameStore.Api.AI;
+﻿namespace GameStore.Api.AI.DTOs;
 
 using System.ComponentModel.DataAnnotations;
 
