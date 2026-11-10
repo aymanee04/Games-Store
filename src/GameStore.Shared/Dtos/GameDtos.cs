@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using GameStore.Api.validations;
+using GameStore.Shared.validations;
 
-namespace GameStore.Api.Dtos;
 
 public record GameDto(int Id, string Name, int GenreId, string Genre, int StudioId, string Studio, decimal Price, DateOnly ReleaseDate);
 
@@ -11,7 +11,7 @@ public record CreateGameRequest(
     [Range(1, int.MaxValue)] int GenreId,
     [Range(1, int.MaxValue)] int StudioId,
     [Range(0.0, 1000.0), NoWhitespace] decimal Price,
-    [Required, ValidReleaseDate] DateOnly ReleaseDate
+    [Required, ValidReleaseDate] DateOnly? ReleaseDate
     );
 
 public record UpdateGameRequest(

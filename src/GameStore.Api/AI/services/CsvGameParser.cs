@@ -2,6 +2,7 @@
 using System.Globalization;
 using GameStore.Api.AI.DTOs;
 using GameStore.Api.AI.Interfaces;
+using GameStore.Api.Exceptions;
 using Microsoft.VisualBasic.FileIO;
 
 namespace GameStore.Api.AI.Services;
@@ -22,12 +23,12 @@ public class CsvGameParser : ICsvGameParser
         parser.SetDelimiters(",");
 
         if (parser.EndOfData)
-            throw new InvalidOperationException("The CSV file is empty.");
+            throw new BadRequestException("The CSV file is empty.");
 
         var headers = parser.ReadFields();
 
         if (headers is null)
-            throw new InvalidOperationException("Could not read CSV headers.");
+            throw new BadRequestException("Could not read CSV headers.");
 
         var columnIndexes = headers
             .Select((header, index) => new
@@ -53,7 +54,7 @@ public class CsvGameParser : ICsvGameParser
         foreach (var column in requiredColumns)
         {
             if (!columnIndexes.ContainsKey(column))
-                throw new InvalidOperationException(
+                throw new BadRequestException(
                     $"Missing required CSV column: {column}");
         }
 
@@ -81,7 +82,7 @@ public class CsvGameParser : ICsvGameParser
                     CultureInfo.InvariantCulture,
                     out var price))
             {
-                throw new InvalidOperationException(
+                throw new BadRequestException(
                     $"Invalid price for game: {GetValue("Name")}");
             }
 
@@ -97,7 +98,7 @@ public class CsvGameParser : ICsvGameParser
                         DateTimeStyles.None,
                         out var parsedDate))
                 {
-                    throw new InvalidOperationException(
+                    throw new BadRequestException(
                         $"Invalid release date for game: {GetValue("Name")}");
                 }
 

@@ -1,4 +1,4 @@
-namespace GameStore.Api.Dtos;
+namespace GameStore.Shared.Dtos;
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, int TotalCount)
 {

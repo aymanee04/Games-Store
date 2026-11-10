@@ -1,0 +1,10 @@
+.filters { display: flex; flex-wrap: wrap; gap: .75rem 1rem; align-items: flex-end; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+.filters label { display: flex; flex-direction: column; gap: .25rem; margin: 0; }
+.filters select, .filters input { min-width: 11rem; }
+
+.games td { font-variant-numeric: tabular-nums; }
+.games td:first-child { font-weight: 500; }
+.games tbody tr:hover td { background: #fafbfc; }
+.games .num { text-align: right; }
+
+.pager { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 1rem; color: var(--muted); font-size: .9rem; }

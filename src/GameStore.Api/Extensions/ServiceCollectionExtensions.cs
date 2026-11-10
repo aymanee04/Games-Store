@@ -1,4 +1,5 @@
 using System.Text;
+using GameStore.Api.AI.DTOs;
 using GameStore.Api.AI.Interfaces;
 using GameStore.Api.Data;
 using GameStore.Api.Entities;

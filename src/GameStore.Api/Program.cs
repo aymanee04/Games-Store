@@ -5,7 +5,6 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddEnvironmentVariables();
 
 builder.Services.AddApplicationServices(builder.Configuration);
-builder.Services.AddOpenApi();
 builder.Services.AddSwaggerGen();
 builder.Services.AddCors(o => o.AddPolicy("Client", p => p
     .WithOrigins("http://localhost:5014")
@@ -21,7 +20,6 @@ app.UseAuthorization();
 if (app.Environment.IsDevelopment())
 {
     await app.InitialiseDatabaseAsync(); // apply migrations + seed sample data
-    app.MapOpenApi(); // GET /openapi/v1.json
     app.UseSwagger();
     app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "GameStore.Api v1"));
 }

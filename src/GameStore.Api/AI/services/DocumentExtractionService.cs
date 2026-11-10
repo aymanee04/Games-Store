@@ -1,5 +1,5 @@
-﻿using Microsoft.VisualBasic.FileIO;
-using GameStore.Api.AI.Interfaces;
+﻿using GameStore.Api.AI.Interfaces;
+using GameStore.Api.Exceptions;
 
 namespace GameStore.Api.AI.Services;
 
@@ -12,17 +12,17 @@ public class DocumentExtractionService : IDocumentExtractionService
         CancellationToken ct)
     {
         if (file.Length == 0)
-            throw new InvalidOperationException("The uploaded file is empty.");
+            throw new BadRequestException("The uploaded file is empty.");
 
         if (file.Length > MaxFileSize)
-            throw new InvalidOperationException("Maximum file size is 5 MB.");
+            throw new BadRequestException("Maximum file size is 5 MB.");
 
         var extension = Path.GetExtension(file.FileName);
 
         if (!string.Equals(extension, ".csv",
                 StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException(
+            throw new BadRequestException(
                 "Only CSV files are supported currently.");
         }
 
@@ -33,36 +33,8 @@ public class DocumentExtractionService : IDocumentExtractionService
         var content = await reader.ReadToEndAsync(ct);
 
         if (string.IsNullOrWhiteSpace(content))
-            throw new InvalidOperationException("The CSV file contains no data.");
+            throw new BadRequestException("The CSV file contains no data.");
 
         return content;
     }
-
-    // private static string ParseCsv(string content)
-    // {
-    //     using var reader = new StringReader(content);
-    //
-    //     using var parser = new TextFieldParser(reader)
-    //     {
-    //         TextFieldType = FieldType.Delimited,
-    //         HasFieldsEnclosedInQuotes = true,
-    //         TrimWhiteSpace = true
-    //     };
-    //
-    //     parser.SetDelimiters(",");
-    //
-    //     var rows = new List<string>();
-    //
-    //     while (!parser.EndOfData)
-    //     {
-    //         var fields = parser.ReadFields();
-    //
-    //         if (fields is null)
-    //             continue;
-    //
-    //         rows.Add(string.Join(" | ", fields));
-    //     }
-    //
-    //     return string.Join(Environment.NewLine, rows);
-    // }
 }

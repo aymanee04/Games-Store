@@ -1,37 +1,175 @@
-﻿@page "/games"
+@page "/games"
+@using System.Globalization
+@using GameStore.Client.Services
 @using GameStore.Shared.Dtos
-@inject HttpClient Http
+@inject StoreApi Api
 
 <PageTitle>Games</PageTitle>
 <h1>Games</h1>
 
-@if (_result is null)
-{
-    <p>Loading...</p>
-}
-else
-{
-    <ul>
-        @foreach (var game in _result.Items)
-        {
-            <li>@game.Name</li>
-        }
-    </ul>
+<div class="filters panel">
+    <label>
+        Genre
+        <select value="@(_genreId?.ToString() ?? "")" @onchange="OnGenreChanged">
+            <option value="">All genres</option>
+            @foreach (var genre in _genres)
+            {
+                <option value="@genre.Id">@Pretty(genre.Name)</option>
+            }
+        </select>
+    </label>
 
-    <button @onclick="Previous" disabled="@(_page <= 1)">Previous</button>
-    <span>Page @_page of @_result.TotalPages</span>
-    <button @onclick="Next" disabled="@(_page >= _result.TotalPages)">Next</button>
+    <label>
+        Studio
+        <select value="@(_studioId?.ToString() ?? "")" @onchange="OnStudioChanged">
+            <option value="">All studios</option>
+            @foreach (var studio in _studios)
+            {
+                <option value="@studio.Id">@Pretty(studio.Name)</option>
+            }
+        </select>
+    </label>
+
+    <label>
+        Search
+        <input type="search" @bind="_search" @bind:event="oninput" @onkeydown="OnSearchKey" placeholder="Game name…" />
+    </label>
+
+    <button type="button" @onclick="ApplySearch">Search</button>
+    <button type="button" @onclick="ClearFilters" disabled="@(!HasFilters)">Clear</button>
+</div>
+
+@if (_error is not null)
+{
+    <p class="error" role="alert">@_error</p>
+}
+
+@if (_result is null && _error is null)
+{
+    <p class="muted">Loading…</p>
+}
+else if (_result is not null)
+{
+    @if (_result.Items.Count == 0)
+    {
+        <p class="muted">No games match your filters.</p>
+    }
+    else
+    {
+        <div class="table-wrap" aria-busy="@(_loading ? "true" : "false")">
+            <table class="games">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Genre</th>
+                        <th>Studio</th>
+                        <th class="num">Price</th>
+                        <th>Release date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var game in _result.Items)
+                    {
+                        <tr>
+                            <td>@Pretty(game.Name)</td>
+                            <td><button type="button" class="link" @onclick="() => FilterGenre(game.GenreId)">@Pretty(game.Genre)</button></td>
+                            <td><button type="button" class="link" @onclick="() => FilterStudio(game.StudioId)">@Pretty(game.Studio)</button></td>
+                            <td class="num">$@game.Price.ToString("0.00", CultureInfo.InvariantCulture)</td>
+                            <td>@game.ReleaseDate.ToString("yyyy-MM-dd")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pager">
+            <button type="button" @onclick="Previous" disabled="@(_loading || _page <= 1)">Previous</button>
+            <span>Page @_page of @Math.Max(_result.TotalPages, 1) · @_result.TotalCount game(s)</span>
+            <button type="button" @onclick="Next" disabled="@(_loading || _page >= _result.TotalPages)">Next</button>
+        </div>
+    }
 }
 
 @code {
+    private const int PageSize = 10;
+
     private PagedResult<GameDto>? _result;
+    private List<GenreDto> _genres = [];
+    private List<StudioDtos> _studios = [];
+    private int? _genreId;
+    private int? _studioId;
+    private string _search = "";
+    private string _appliedSearch = "";
     private int _page = 1;
+    private bool _loading;
+    private string? _error;
 
-    protected override async Task OnInitializedAsync() => await Load();
+    private bool HasFilters => _genreId is not null || _studioId is not null || _appliedSearch.Length > 0 || _search.Length > 0;
 
-    private async Task Load() =>
-        _result = await Http.GetFromJsonAsync<PagedResult<GameDto>>($"http://localhost:5080/api/games?page={_page}&pageSize=2");
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _genres = await Api.GetGenresAsync();
+            _studios = await Api.GetStudiosAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ApiErrors.Describe(ex);
+            return;
+        }
 
-    private async Task Next()     { _page++; await Load(); }
-    private async Task Previous() { _page--; await Load(); }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _result = await Api.GetGamesAsync(_genreId, _studioId, _appliedSearch, _page, PageSize);
+        }
+        catch (Exception ex)
+        {
+            _error = ApiErrors.Describe(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task OnGenreChanged(ChangeEventArgs e) => FilterGenre(ParseId(e.Value));
+    private Task OnStudioChanged(ChangeEventArgs e) => FilterStudio(ParseId(e.Value));
+
+    private Task FilterGenre(int? id) { _genreId = id; _page = 1; return LoadAsync(); }
+    private Task FilterStudio(int? id) { _studioId = id; _page = 1; return LoadAsync(); }
+
+    private Task ApplySearch() { _appliedSearch = _search.Trim(); _page = 1; return LoadAsync(); }
+
+    private async Task OnSearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await ApplySearch();
+    }
+
+    private Task ClearFilters()
+    {
+        _genreId = null;
+        _studioId = null;
+        _search = "";
+        _appliedSearch = "";
+        _page = 1;
+        return LoadAsync();
+    }
+
+    private Task Next() { _page++; return LoadAsync(); }
+    private Task Previous() { _page--; return LoadAsync(); }
+
+    private static int? ParseId(object? value) =>
+        int.TryParse(value?.ToString(), out var id) ? id : null;
+
+    // Names are stored lowercase; show them nicely.
+    private static string Pretty(string value) => CultureInfo.CurrentCulture.TextInfo.ToTitleCase(value);
 }

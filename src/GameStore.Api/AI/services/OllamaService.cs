@@ -21,6 +21,49 @@ public class OllamaService : IOllamaService
         PropertyNameCaseInsensitive = true
     };
 
+    // Same JSON shape for extraction and generation: { "games": [ {...}, {...} ] }
+    // When allowedGenres is given, the model is physically unable to return any
+    // genre outside that list (JSON-schema enum enforced by Ollama's decoder).
+    private static object BuildGamesSchema(IReadOnlyList<string>? allowedGenres = null)
+    {
+        object genreName = allowedGenres is { Count: > 0 }
+            ? new { type = "string", @enum = allowedGenres }
+            : new { type = "string" };
+
+        return new
+        {
+            type = "object",
+            properties = new
+            {
+                games = new
+                {
+                    type = "array",
+                    items = new
+                    {
+                        type = "object",
+                        properties = new
+                        {
+                            name = new { type = "string" },
+                            genreName,
+                            studioName = new { type = "string" },
+                            price = new { type = "number" },
+                            releaseDate = new
+                            {
+                                type = new[] { "string", "null" }
+                            }
+                        },
+                        required = new[]
+                        {
+                            "name", "genreName", "studioName",
+                            "price", "releaseDate"
+                        }
+                    }
+                }
+            },
+            required = new[] { "games" }
+        };
+    }
+
     public OllamaService(
         HttpClient httpClient,
         ILogger<OllamaService> logger,
@@ -30,28 +73,36 @@ public class OllamaService : IOllamaService
         _options = options.Value;
         _logger = logger;
     }
-
-    public async Task<GameGenerationDto> GenerateGameAsync(
+    
+    // ---------- Create games from a free-text prompt ----------
+    public async Task<List<ExtractedGameDto>> GenerateGamesAsync(
         string prompt,
         IReadOnlyList<string> genres,
         IReadOnlyList<string> studios,
         CancellationToken ct)
     {
         var systemPrompt = $"""
-            You are a game catalog assistant.
+            You are a game catalog assistant for a game store.
 
-            Your task is to generate a game proposal from the user's description.
+            The user describes one or more games they want to add to the catalog.
+            Turn the description into structured game entries.
 
             Rules:
-            - Return only data matching the provided JSON schema.
-            - Never invent genre names.
-            - Select a genre from the available genres.
-            - Select a studio from the available studios.
-            - Use the exact names provided in the lists.
-            - Price must be between 0 and 1000.
-            - ReleaseDate must use YYYY-MM-DD format.
+            - Return only JSON matching the requested schema, with no extra text.
+            - Return exactly the number of games the user asks for. If no number is given, return 1.
+            - Use the name the user gives. If no name is given, propose a fitting original name.
+            - genreName: MUST be exactly one value from the available genres list.
+              Never invent or combine genres. If the user describes a genre that is not in the list
+              (for example "action RPG"), choose the closest genre from the list.
+            - studioName: pick from the available studios, using the exact spelling from the list.
+            - If the user explicitly names a studio that is NOT in the studios list,
+              return it exactly as the user wrote it. Do not replace it with another one.
+            - If the user does not mention a genre or studio, pick the best match from the lists.
+            - price: use the price the user gives. Otherwise propose a reasonable price
+              between 0 and 1000 (a number, no currency symbol).
+            - releaseDate: YYYY-MM-DD. If the user gives only a year, use January 1st of that year.
+              If no date is given, propose a plausible date.
             - Do not invent database IDs.
-            - If information is missing, make a reasonable proposal.
 
             Available genres:
             {JsonSerializer.Serialize(genres)}
@@ -60,246 +111,150 @@ public class OllamaService : IOllamaService
             {JsonSerializer.Serialize(studios)}
             """;
 
-        var schema = new
+        var content = await SendChatAsync(
+            systemPrompt, prompt, "generation", BuildGamesSchema(genres), ct);
+
+        return ParseGames(content);
+    }
+
+    // ---------- Shared helpers ----------
+    private async Task<string> SendChatAsync(
+        string systemPrompt,
+        string userPrompt,
+        string operation,
+        object schema,
+        CancellationToken ct)
+    {
+        var stopwatch = Stopwatch.StartNew();
+
+        var modelOptions = new Dictionary<string, object>
         {
-            type = "object",
-            properties = new
-            {
-                name = new
-                {
-                    type = "string"
-                },
-                genreName = new
-                {
-                    type = "string"
-                },
-                studioName = new
-                {
-                    type = "string"
-                },
-                price = new
-                {
-                    type = "number"
-                },
-                releaseDate = new
-                {
-                    type = "string",
-                    format = "date"
-                }
-            },
-            required = new[]
-            {
-                "name",
-                "genreName",
-                "studioName",
-                "price",
-                "releaseDate"
-            },
-            additionalProperties = false
+            ["temperature"] = 0.1,
+            ["num_predict"] = 2048,
+            ["num_ctx"] = _options.NumCtx
         };
 
-        var requestBody = new
-        {
-            model = _options.Model,
-            stream = false,
-            format = schema,
-            messages = new[]
-            {
-                new
-                {
-                    role = "system",
-                    content = systemPrompt
-                },
-                new
-                {
-                    role = "user",
-                    content = prompt
-                }
-            },
-            options = new
-            {
-                temperature = 0.1,
-                num_predict = 2048
-            }
-        };
+        if (_options.NumThread is { } threads)
+            modelOptions["num_thread"] = threads;
 
         using var response = await _httpClient.PostAsJsonAsync(
             "api/chat",
-            requestBody,
+            new
+            {
+                model = _options.Model,
+                stream = false,
+                format = schema,
+                keep_alive = _options.KeepAlive,
+                messages = new[]
+                {
+                    new { role = "system", content = systemPrompt },
+                    new { role = "user", content = userPrompt }
+                },
+                options = modelOptions
+            },
             ct);
+
+        _logger.LogInformation(
+            "Ollama {Operation} request completed in {ElapsedSeconds:F2} seconds",
+            operation,
+            stopwatch.Elapsed.TotalSeconds);
 
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<OllamaResponse>(
-            JsonOptions,
-            ct);
+            JsonOptions, ct);
+
+        if (result is not null)
+        {
+            const double nsPerSecond = 1_000_000_000d;
+
+            var tokensPerSecond = result.EvalDuration > 0
+                ? result.EvalCount / (result.EvalDuration / nsPerSecond)
+                : 0;
+
+            _logger.LogInformation(
+                "Ollama {Operation} breakdown: model load {Load:F1}s, " +
+                "prompt {PromptTokens} tokens in {Prompt:F1}s, " +
+                "output {OutputTokens} tokens in {Output:F1}s ({Tps:F1} tokens/s)",
+                operation,
+                result.LoadDuration / nsPerSecond,
+                result.PromptEvalCount,
+                result.PromptEvalDuration / nsPerSecond,
+                result.EvalCount,
+                result.EvalDuration / nsPerSecond,
+                tokensPerSecond);
+
+            if (result.DoneReason == "length")
+                _logger.LogWarning(
+                    "Ollama {Operation} output was cut off at the token limit",
+                    operation);
+        }
 
         var content = result?.Message?.Content;
 
         if (string.IsNullOrWhiteSpace(content))
-        {
             throw new InvalidOperationException(
-                "Ollama returned an empty response.");
-        }
+                $"Ollama returned an empty {operation} result.");
 
-        return JsonSerializer.Deserialize<GameGenerationDto>(
-                   content,
-                   JsonOptions)
-               ?? throw new InvalidOperationException(
-                   "Could not deserialize the generated game.");
+        return content;
     }
-    
-    
-    public async Task<List<ExtractedGameDto>> ExtractGamesAsync(
-    string documentContent,
-    IReadOnlyList<string> genres,
-    IReadOnlyList<string> studios,
-    CancellationToken ct)
-{
-    var systemPrompt = """
-        You are a data extraction assistant for a game management system.
 
-        Extract every game found in the provided document.
-
-        Return only structured JSON matching the requested schema.
-
-        Rules:
-        - Extract only information present in the document.
-        - Never invent missing information.
-        - Use only the provided genre names.
-        - Use only the provided studio names.
-        - If a genre or studio cannot be matched, return an empty string.
-        - If the price is missing, use 0.
-        - Return releaseDate only in YYYY-MM-DD format.
-        - If the date is missing, unclear, or invalid, return null.
-        - Never invent a release date.
-        - If the release date is missing or unclear, use null.
-        - Ignore text that does not describe a game.
-        - Do not create duplicate games from repeated document rows.
-        - Process all games efficiently.
-        - Return exactly one result for each valid game row.
-        - Do not provide explanations or additional text.
-        - Keep each field concise.
-        - Return only the requested JSON.
-        """;
-
-    var userPrompt = $"""
-        Available genres:
-        {string.Join(", ", genres)}
-
-        Available studios:
-        {string.Join(", ", studios)}
-
-        Extract the games from this document:
-
-        {documentContent}
-        """;
-
-    var schema = new
+    private static List<ExtractedGameDto> ParseGames(string json)
     {
-        type = "object",
-        properties = new
-        {
-            games = new
+        var extraction = JsonSerializer.Deserialize<GameExtractionResponse>(
+                             json, JsonOptions)
+                         ?? throw new InvalidOperationException(
+                             "Ollama returned an empty response.");
+
+        return (extraction.Games ?? [])
+            .Where(g => !string.IsNullOrWhiteSpace(g.Name))
+            .Select(g =>
             {
-                type = "array",
-                items = new
+                DateOnly? releaseDate = null;
+
+                if (!string.IsNullOrWhiteSpace(g.ReleaseDate) &&
+                    DateOnly.TryParseExact(
+                        g.ReleaseDate,
+                        "yyyy-MM-dd",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out var parsedDate))
                 {
-                    type = "object",
-                    properties = new
-                    {
-                        name = new { type = "string" },
-                        genreName = new { type = "string" },
-                        studioName = new { type = "string" },
-                        price = new { type = "number" },
-                        releaseDate = new
-                        {
-                            type = new[] { "string", "null" }
-                        }
-                    },
-                    required = new[]
-                    {
-                        "name", "genreName", "studioName",
-                        "price", "releaseDate"
-                    }
+                    releaseDate = parsedDate;
                 }
-            }
-        },
-        required = new[] { "games" }
-    };
 
-    var stopwatch = Stopwatch.StartNew();
-    var response = await _httpClient.PostAsJsonAsync(
-        "api/chat",
-        new
-        {
-            model = _options.Model,
-            stream = false,
-            format = schema,
-            messages = new[]
-            {
-                new { role = "system", content = systemPrompt },
-                new { role = "user", content = userPrompt }
-            },
-            options = new
-            {
-                temperature = 0.1,
-                num_predict = 2048
-            }
-        },
-        ct);
-    _logger.LogInformation(
-        "Ollama extraction request completed in {ElapsedSeconds:F2} seconds",
-        stopwatch.Elapsed.TotalSeconds);
+                return new ExtractedGameDto(
+                    g.Name!.Trim(),
+                    g.GenreName?.Trim() ?? "",
+                    g.StudioName?.Trim() ?? "",
+                    g.Price,
+                    releaseDate);
+            })
+            .ToList();
+    }
 
-    response.EnsureSuccessStatusCode();
-
-    var result = await response.Content.ReadFromJsonAsync<OllamaResponse>(
-        cancellationToken: ct);
-
-    if (string.IsNullOrWhiteSpace(result?.Message?.Content))
-        throw new InvalidOperationException(
-            "Ollama returned an empty extraction result.");
-    
-    var extraction = JsonSerializer.Deserialize<GameExtractionResponse>(
-        result.Message!.Content!,
-        JsonOptions
-    );
-
-    if (extraction is null)
-        throw new InvalidOperationException("Ollama returned an empty response.");
-
-    var games = extraction.Games.Select(game =>
-    {
-        DateOnly? releaseDate = null;
-
-        if (!string.IsNullOrWhiteSpace(game.ReleaseDate) &&
-            DateOnly.TryParseExact(
-                game.ReleaseDate,
-                "yyyy-MM-dd",
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out var parsedDate))
-        {
-            releaseDate = parsedDate;
-        }
-
-        return new ExtractedGameDto(
-            game.Name,
-            game.GenreName,
-            game.StudioName,
-            game.Price,
-            releaseDate
-        );
-    }).ToList();
-
-    return games;
-}
-    
     private sealed class OllamaResponse
     {
         [JsonPropertyName("message")]
         public OllamaMessage? Message { get; set; }
+
+        [JsonPropertyName("done_reason")]
+        public string? DoneReason { get; set; }
+
+        [JsonPropertyName("load_duration")]
+        public long LoadDuration { get; set; }
+
+        [JsonPropertyName("prompt_eval_count")]
+        public int PromptEvalCount { get; set; }
+
+        [JsonPropertyName("prompt_eval_duration")]
+        public long PromptEvalDuration { get; set; }
+
+        [JsonPropertyName("eval_count")]
+        public int EvalCount { get; set; }
+
+        [JsonPropertyName("eval_duration")]
+        public long EvalDuration { get; set; }
     }
 
     private sealed class OllamaMessage
@@ -310,25 +265,17 @@ public class OllamaService : IOllamaService
         [JsonPropertyName("content")]
         public string? Content { get; set; }
     }
-    
+
     private sealed record OllamaExtractedGame(
-        string Name,
-        string GenreName,
-        string StudioName,
+        string? Name,
+        string? GenreName,
+        string? StudioName,
         decimal Price,
         string? ReleaseDate
     );
 
     private sealed class GameExtractionResponse
     {
-        public List<OllamaExtractedGame> Games { get; set; } = [];
+        public List<OllamaExtractedGame>? Games { get; set; } = [];
     }
 }
-
-
-// info: System.Net.Http.HttpClient.IOllamaService.ClientHandler[101]
-// Received HTTP response headers after 184470.7868ms - 200
-// info: System.Net.Http.HttpClient.IOllamaService.LogicalHandler[101]
-// End processing HTTP request after 184492.1696ms - 200
-// info: GameStore.Api.AI.services.OllamaService[0]
-// Ollama extraction request completed in 184.54 seconds

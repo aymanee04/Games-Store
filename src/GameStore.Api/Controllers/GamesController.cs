@@ -10,11 +10,13 @@ namespace GameStore.Api.Controllers;
 [Produces("application/json")]
 public class GamesController(IGameService games) : ControllerBase
 {
+    [AllowAnonymous]
     [HttpGet]
     public async Task<ActionResult<PagedResult<GameDto>>> GetAll(
         [FromQuery] GameQueryParameters query, CancellationToken ct) =>
         Ok(await games.GetAllAsync(query, ct));
 
+    [AllowAnonymous]
     [HttpGet("{id:int}")]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<GameDto>> GetById(int id, CancellationToken ct) =>

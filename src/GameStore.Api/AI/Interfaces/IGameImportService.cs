@@ -8,6 +8,10 @@ public interface IGameImportService
         IFormFile file,
         CancellationToken ct);
 
+    Task<List<ExtractedGameDto>> ExtractGamesFromPromptAsync(
+        string prompt,
+        CancellationToken ct);
+
     Task<List<GameDto>> ImportGamesAsync(
         ImportGamesRequest request,
         CancellationToken ct);

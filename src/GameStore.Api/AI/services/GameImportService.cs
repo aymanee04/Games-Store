@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using GameStore.Api.AI.DTOs;
 using GameStore.Api.AI.Interfaces;
 using GameStore.Api.Exceptions;
@@ -12,8 +13,12 @@ public class GameImportService(
     IGenreService genreService,
     IStudioService studioService,
     IGameService gameService,
-    ICsvGameParser csvGameParser) : IGameImportService
+    ICsvGameParser csvGameParser,
+    ILogger<GameImportService> logger) : IGameImportService
 {
+    private const int MaxGamesPerImport = 50;
+
+    // ---------- Option 1: CSV upload ----------
     public async Task<List<ExtractedGameDto>> ExtractGamesAsync(
         IFormFile file,
         CancellationToken ct)
@@ -25,26 +30,63 @@ public class GameImportService(
         var genres = await genreService.GetAllAsync(ct);
         var studios = await studioService.GetAllAsync(ct);
 
-        var validGenres = genres.Select(g => g.Name).ToHashSet(
-            StringComparer.OrdinalIgnoreCase);
-
-        var validStudios = studios.Select(s => s.Name).ToHashSet(
-            StringComparer.OrdinalIgnoreCase);
-
-        return games.Select(game => game with
-        {
-            GenreName = validGenres.Contains(game.GenreName)
-                ? genres.First(g => string.Equals(
-                    g.Name, game.GenreName, StringComparison.OrdinalIgnoreCase)).Name
-                : game.GenreName,
-
-            StudioName = validStudios.Contains(game.StudioName)
-                ? studios.First(s => string.Equals(
-                    s.Name, game.StudioName, StringComparison.OrdinalIgnoreCase)).Name
-                : game.StudioName
-        }).ToList();
+        return NormalizeNames(
+            games,
+            genres.Select(g => g.Name),
+            studios.Select(s => s.Name));
     }
 
+    // ---------- Option 2: text prompt ----------
+    public async Task<List<ExtractedGameDto>> ExtractGamesFromPromptAsync(
+        string prompt,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(prompt))
+            throw new BadRequestException("The prompt cannot be empty.");
+
+        var genres = await genreService.GetAllAsync(ct);
+        var studios = await studioService.GetAllAsync(ct);
+
+        var genreNames = genres.Select(g => g.Name).ToList();
+        var studioNames = studios.Select(s => s.Name).ToList();
+
+        List<ExtractedGameDto> games;
+
+        try
+        {
+            games = await ollamaService.GenerateGamesAsync(
+                prompt.Trim(), genreNames, studioNames, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            logger.LogError(ex, "Could not reach Ollama");
+            throw new ServiceUnavailableException(
+                "The AI service is not reachable. Make sure Ollama is running.");
+        }
+        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            logger.LogError(ex, "Ollama request timed out");
+            throw new ServiceUnavailableException(
+                "The AI service took too long to respond. Try a shorter prompt.");
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            logger.LogWarning(ex, "Ollama returned an unusable response");
+            throw new BadRequestException(
+                "The AI could not turn that prompt into games. Try rephrasing it.");
+        }
+
+        if (games.Count == 0)
+            throw new BadRequestException(
+                "No games could be created from that prompt. Describe the game(s) in more detail.");
+
+        return NormalizeNames(
+            games.Take(MaxGamesPerImport),
+            genreNames,
+            studioNames);
+    }
+
+    // ---------- Shared by both options ----------
     public async Task<List<GameDto>> ImportGamesAsync(
         ImportGamesRequest request,
         CancellationToken ct)
@@ -52,8 +94,9 @@ public class GameImportService(
         if (request.Games.Count == 0)
             throw new BadRequestException("No games were provided.");
 
-        if (request.Games.Count > 50)
-            throw new BadRequestException("You can import at most 50 games at once.");
+        if (request.Games.Count > MaxGamesPerImport)
+            throw new BadRequestException(
+                $"You can import at most {MaxGamesPerImport} games at once.");
 
         var genres = await genreService.GetAllAsync(ct);
         var studios = await studioService.GetAllAsync(ct);
@@ -115,5 +158,28 @@ public class GameImportService(
         }
 
         return createdGames;
+    }
+
+    /// <summary>
+    /// Snaps genre/studio names to the exact stored spelling (case-insensitive match).
+    /// Names that don't exist are left untouched so the admin can see and fix them
+    /// before confirming.
+    /// </summary>
+    private static List<ExtractedGameDto> NormalizeNames(
+        IEnumerable<ExtractedGameDto> games,
+        IEnumerable<string> genreNames,
+        IEnumerable<string> studioNames)
+    {
+        var genreMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in genreNames) genreMap.TryAdd(name, name);
+
+        var studioMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in studioNames) studioMap.TryAdd(name, name);
+
+        return games.Select(game => game with
+        {
+            GenreName = genreMap.GetValueOrDefault(game.GenreName, game.GenreName),
+            StudioName = studioMap.GetValueOrDefault(game.StudioName, game.StudioName)
+        }).ToList();
     }
 }
