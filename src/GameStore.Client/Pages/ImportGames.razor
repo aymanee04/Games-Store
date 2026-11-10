@@ -1,0 +1,396 @@
+@page "/admin/import"
+@using GameStore.Client.Models
+@using GameStore.Client.Services
+@using GameStore.Shared.Dtos
+@using System.Globalization
+@implements IDisposable
+@inject ImportApi Import
+@inject StoreApi Store
+
+<PageTitle>Add games</PageTitle>
+
+<AuthorizeView Roles="Admin">
+    <Authorized>
+        <h1>Add games</h1>
+
+        @if (_error is not null)
+        {
+            <div class="banner error" role="alert">
+                @_error
+                @if (_unauthorized)
+                {
+                    <a href="login?returnUrl=%2Fadmin%2Fimport">Log in again</a>
+                }
+            </div>
+        }
+
+        @if (_busy)
+        {
+            <div class="banner busy" role="status">
+                <span class="spinner" aria-hidden="true"></span>
+                <span>@_busyText</span>
+                @if (_cts is not null)
+                {
+                    <button type="button" @onclick="Cancel">Cancel</button>
+                }
+            </div>
+        }
+
+        @if (_step == Step.Input)
+        {
+            <div class="tabs" role="tablist">
+                <button type="button" role="tab" aria-selected="@(_mode == Mode.Prompt ? "true" : "false")"
+                        class="@(_mode == Mode.Prompt ? "active" : "")"
+                        disabled="@_busy" @onclick="() => _mode = Mode.Prompt">Describe with a prompt</button>
+                <button type="button" role="tab" aria-selected="@(_mode == Mode.Csv ? "true" : "false")"
+                        class="@(_mode == Mode.Csv ? "active" : "")"
+                        disabled="@_busy" @onclick="() => _mode = Mode.Csv">Upload a CSV file</button>
+            </div>
+
+            @if (_mode == Mode.Prompt)
+            {
+                <label for="prompt">Describe the game(s) you want to add</label>
+                <textarea id="prompt" rows="4" maxlength="1000" disabled="@_busy"
+                          @bind="_prompt" @bind:event="oninput"
+                          placeholder="e.g. Add 2 action RPGs by Ubisoft released in 2026, priced at 59.99"></textarea>
+                <p class="hint">
+                    @_prompt.Length / 1000. Details you leave out (price, date…) are proposed by the AI.
+                    You can edit everything on the next screen before anything is saved.
+                </p>
+                <button type="button" class="primary" @onclick="GenerateAsync"
+                        disabled="@(_busy || _prompt.Trim().Length < 5)">Generate games</button>
+            }
+            else
+            {
+                <label for="csv">CSV file (max 5 MB)</label>
+                <InputFile id="csv" accept=".csv" OnChange="OnFileChosen" disabled="@_busy" />
+                <p class="hint">
+                    Expected columns: <code>Name, GenreName, StudioName, Price, ReleaseDate</code>.
+                    You can review and edit the rows before anything is saved.
+                </p>
+                <button type="button" class="primary" @onclick="ExtractFileAsync"
+                        disabled="@(_busy || _file is null)">Extract games</button>
+            }
+        }
+        else if (_step == Step.Review)
+        {
+            <p>
+                Check the games below. Click any cell to edit it, then save.
+                Fields marked in red must be fixed first.
+            </p>
+
+            <div class="table-wrap">
+                <table class="grid">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Name</th>
+                            <th>Genre</th>
+                            <th>Studio</th>
+                            <th>Price</th>
+                            <th>Release date</th>
+                            <th><span class="sr-only">Remove</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (var i = 0; i < _rows.Count; i++)
+                        {
+                            var row = _rows[i];
+                            var v = row.Validate(_genreNames, _studioNames);
+
+                            <tr class="@(v.IsValid ? "" : "invalid")">
+                                <td>@(i + 1)</td>
+
+                                <td>
+                                    <input class="@Css(v.Name)" maxlength="100" aria-label="Name"
+                                           @bind="row.Name" @bind:event="oninput" disabled="@_busy" />
+                                    @if (v.Name is not null) { <small class="err">@v.Name</small> }
+                                </td>
+
+                                <td>
+                                    <select class="@Css(v.Genre)" aria-label="Genre" @bind="row.GenreName" disabled="@_busy">
+                                        <option value="">— choose —</option>
+                                        @foreach (var genre in _genreNames)
+                                        {
+                                            <option value="@genre">@Pretty(genre)</option>
+                                        }
+                                    </select>
+                                    @if (v.Genre is not null)
+                                    {
+                                        <small class="err">@(row.GenreHint ?? v.Genre)</small>
+                                    }
+                                </td>
+
+                                <td>
+                                    <select class="@Css(v.Studio)" aria-label="Studio" @bind="row.StudioName" disabled="@_busy">
+                                        <option value="">— choose —</option>
+                                        @foreach (var studio in _studioNames)
+                                        {
+                                            <option value="@studio">@Pretty(studio)</option>
+                                        }
+                                    </select>
+                                    @if (v.Studio is not null)
+                                    {
+                                        <small class="err">@(row.StudioHint ?? v.Studio)</small>
+                                    }
+                                </td>
+
+                                <td>
+                                    <input type="number" step="0.01" min="0" max="1000" class="@Css(v.Price)"
+                                           aria-label="Price" @bind="row.Price" disabled="@_busy" />
+                                    @if (v.Price is not null) { <small class="err">@v.Price</small> }
+                                </td>
+
+                                <td>
+                                    <input type="date" class="@Css(v.Date)" aria-label="Release date"
+                                           @bind="row.ReleaseDate" @bind:format="yyyy-MM-dd" disabled="@_busy" />
+                                    @if (v.Date is not null) { <small class="err">@v.Date</small> }
+                                </td>
+
+                                <td>
+                                    <button type="button" class="danger" disabled="@_busy"
+                                            aria-label="Remove row @(i + 1)" @onclick="() => RemoveRow(row)">✕</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (_unknownGenres.Count > 0 || _unknownStudios.Count > 0)
+            {
+                <p class="hint">
+                    Some genres or studios do not exist yet. Pick an existing one, or create the missing
+                    one first (Admin: <code>POST /api/genres</code> or <code>/api/studios</code>), then start over.
+                </p>
+            }
+
+            <div class="actions">
+                <button type="button" @onclick="AddRow" disabled="@_busy">+ Add row</button>
+                <button type="button" @onclick="StartOver" disabled="@_busy">Start over</button>
+                <span class="spacer"></span>
+                <span class="hint">@_rows.Count game(s)@(InvalidCount > 0 ? $" · {InvalidCount} need attention" : "")</span>
+                <button type="button" class="primary" @onclick="ConfirmAsync" disabled="@(_busy || _rows.Count == 0)">
+                    Confirm and save @_rows.Count game(s)
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="banner success" role="status">
+                Saved @_created.Count game(s).
+            </div>
+
+            <div class="table-wrap">
+                <table class="grid">
+                    <thead><tr><th>Name</th><th>Genre</th><th>Studio</th><th>Price</th><th>Release date</th></tr></thead>
+                    <tbody>
+                        @foreach (var game in _created)
+                        {
+                            <tr>
+                                <td>@Pretty(game.Name)</td>
+                                <td>@Pretty(game.Genre)</td>
+                                <td>@Pretty(game.Studio)</td>
+                                <td>$@game.Price.ToString("0.00", CultureInfo.InvariantCulture)</td>
+                                <td>@game.ReleaseDate.ToString("yyyy-MM-dd")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="actions">
+                <button type="button" class="primary" @onclick="StartOver">Add more games</button>
+                <a href="games">View all games</a>
+            </div>
+        }
+    </Authorized>
+
+    <NotAuthorized>
+        <h1>Add games</h1>
+        @if (context.User.Identity?.IsAuthenticated == true)
+        {
+            <p>Your account does not have the Admin role, so you cannot add games.</p>
+        }
+        else
+        {
+            <p>You need to <a href="login?returnUrl=%2Fadmin%2Fimport">log in</a> as an admin to add games.</p>
+        }
+    </NotAuthorized>
+
+    <Authorizing>
+        <p>Checking your session…</p>
+    </Authorizing>
+</AuthorizeView>
+
+@code {
+    private enum Mode { Prompt, Csv }
+    private enum Step { Input, Review, Done }
+
+    private const int MaxRows = 50;   // same limit as the API
+
+    private Mode _mode = Mode.Prompt;
+    private Step _step = Step.Input;
+
+    private string _prompt = "";
+    private Microsoft.AspNetCore.Components.Forms.IBrowserFile? _file;
+
+    private List<ImportRow> _rows = [];
+    private List<GameDto> _created = [];
+    private string[] _genreNames = [];
+    private string[] _studioNames = [];
+
+    private bool _busy;
+    private string _busyText = "";
+    private string? _error;
+    private bool _unauthorized;
+    private CancellationTokenSource? _cts;
+
+    private int InvalidCount => _rows.Count(r => !r.Validate(_genreNames, _studioNames).IsValid);
+    private List<string> _unknownGenres => _rows.Where(r => r.GenreHint is not null && r.GenreName == "").Select(r => r.GenreHint!).ToList();
+    private List<string> _unknownStudios => _rows.Where(r => r.StudioHint is not null && r.StudioName == "").Select(r => r.StudioHint!).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _genreNames = (await Store.GetGenresAsync()).Select(g => g.Name).ToArray();
+            _studioNames = (await Store.GetStudiosAsync()).Select(s => s.Name).ToArray();
+        }
+        catch (Exception ex)
+        {
+            SetError(ex);
+        }
+    }
+
+    // ---------- Step 1: get a list of games (prompt or CSV) ----------
+    private Task GenerateAsync() =>
+        RunExtractAsync(
+            "Generating games with AI… this runs on your machine and can take up to a minute.",
+            ct => Import.ExtractFromPromptAsync(_prompt.Trim(), ct));
+
+    private Task ExtractFileAsync() =>
+        RunExtractAsync("Reading the CSV file…", ct => Import.ExtractFromFileAsync(_file!, ct));
+
+    private async Task RunExtractAsync(string busyText, Func<CancellationToken, Task<List<ExtractedGameResponse>>> action)
+    {
+        _error = null;
+        _unauthorized = false;
+        _busy = true;
+        _busyText = busyText;
+
+        var cts = _cts = new CancellationTokenSource();
+
+        try
+        {
+            var extracted = await action(cts.Token);
+
+            if (extracted.Count == 0)
+            {
+                _error = "No games were found. Try again with more detail.";
+                return;
+            }
+
+            _rows = extracted.Select(r => ImportRow.From(r, _genreNames, _studioNames)).ToList();
+            _step = Step.Review;
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            _error = "Cancelled.";
+        }
+        catch (Exception ex)
+        {
+            SetError(ex);
+        }
+        finally
+        {
+            _busy = false;
+            _cts = null;
+            cts.Dispose();
+        }
+    }
+
+    private void Cancel() => _cts?.Cancel();
+
+    private void OnFileChosen(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e)
+    {
+        _error = null;
+        _file = null;
+
+        var file = e.File;
+
+        if (!file.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+            _error = "Please choose a .csv file.";
+        else if (file.Size == 0)
+            _error = "That file is empty.";
+        else if (file.Size > ImportApi.MaxFileBytes)
+            _error = "That file is larger than 5 MB.";
+        else
+            _file = file;
+    }
+
+    // ---------- Step 2: review / edit / confirm ----------
+    private void RemoveRow(ImportRow row) => _rows.Remove(row);
+
+    private void AddRow() => _rows.Add(new ImportRow { Price = 0 });
+
+    private async Task ConfirmAsync()
+    {
+        _error = null;
+        _unauthorized = false;
+
+        if (_rows.Count > MaxRows)
+        {
+            _error = $"You can save at most {MaxRows} games at once. Remove {_rows.Count - MaxRows} row(s) and import them in a second batch.";
+            return;
+        }
+
+        var invalid = InvalidCount;
+        if (invalid > 0)
+        {
+            _error = $"{invalid} row(s) need attention. Fix the fields marked in red, then confirm again.";
+            return;
+        }
+
+        _busy = true;
+        _busyText = "Saving games…";
+
+        try
+        {
+            _created = await Import.ConfirmAsync(_rows);
+            _step = Step.Done;
+        }
+        catch (Exception ex)
+        {
+            SetError(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void StartOver()
+    {
+        _step = Step.Input;
+        _rows = [];
+        _created = [];
+        _prompt = "";
+        _file = null;
+        _error = null;
+        _unauthorized = false;
+    }
+
+    // ---------- helpers ----------
+    private void SetError(Exception ex)
+    {
+        _error = ApiErrors.Describe(ex);
+        _unauthorized = ex is ApiException { StatusCode: System.Net.HttpStatusCode.Unauthorized };
+    }
+
+    private static string Css(string? error) => error is null ? "" : "bad";
+
+    private static string Pretty(string value) => CultureInfo.CurrentCulture.TextInfo.ToTitleCase(value);
+
+    public void Dispose() => _cts?.Cancel();
+}

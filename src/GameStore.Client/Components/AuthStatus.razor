@@ -1,0 +1,26 @@
+@using GameStore.Client.Services
+@inject AuthClient Auth
+@inject NavigationManager Nav
+
+<AuthorizeView>
+    <Authorized>
+        <span class="auth-name">@context.User.Identity?.Name</span>
+
+        <AuthorizeView Roles="Admin" Context="adminCtx">
+            <a href="/admin/import">Add games</a>
+        </AuthorizeView>
+
+        <button type="button" @onclick="LogoutAsync">Log out</button>
+    </Authorized>
+    <NotAuthorized>
+        <a href="/login">Log in</a>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private async Task LogoutAsync()
+    {
+        await Auth.LogoutAsync();
+        Nav.NavigateTo("/games");
+    }
+}

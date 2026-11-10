@@ -15,8 +15,8 @@ public class TokenService(IConfiguration configuration, TimeProvider timeProvide
         var jwtKey = configuration["JWT_KEY"]
                      ?? throw new InvalidOperationException("JWT_KEY configuration is missing.");
 
-        var issuer = configuration["JWT_AUDIENCE"] ??
-                     throw new InvalidOperationException("Jwt:Audience configuration is missing.");
+        var issuer = configuration["JWT_ISSUER"] ??
+                     throw new InvalidOperationException("Jwt:Issuer configuration is missing.");
 
         var audience = configuration["JWT_AUDIENCE"] ??
                        throw new InvalidOperationException("Jwt:Audience configuration is missing.");

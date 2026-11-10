@@ -1,7 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using GameStore.Api.validations;
+using GameStore.Shared.validations;
 
-namespace GameStore.Api.Dtos;
+namespace GameStore.Shared.Dtos;
 
 public record StudioDtos(int Id, string Name);
 

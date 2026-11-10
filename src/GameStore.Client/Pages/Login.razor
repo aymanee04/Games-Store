@@ -1,0 +1,71 @@
+@page "/login"
+@using System.ComponentModel.DataAnnotations
+@using GameStore.Client.Services
+@inject AuthClient Auth
+@inject NavigationManager Nav
+
+<PageTitle>Log in</PageTitle>
+<h1>Log in</h1>
+
+<div class="panel narrow">
+    <EditForm Model="_model" OnValidSubmit="SubmitAsync" class="login-form">
+        <DataAnnotationsValidator />
+
+        <label for="email">Email</label>
+        <InputText id="email" type="email" autocomplete="username" @bind-Value="_model.Email" />
+        <ValidationMessage For="() => _model.Email" />
+
+        <label for="password">Password</label>
+        <InputText id="password" type="password" autocomplete="current-password" @bind-Value="_model.Password" />
+        <ValidationMessage For="() => _model.Password" />
+
+        @if (_error is not null)
+        {
+            <p class="error" role="alert">@_error</p>
+        }
+
+        <button type="submit" disabled="@_busy">@(_busy ? "Logging in…" : "Log in")</button>
+    </EditForm>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    private readonly LoginModel _model = new();
+    private bool _busy;
+    private string? _error;
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            await Auth.LoginAsync(_model.Email.Trim(), _model.Password);
+            Nav.NavigateTo(IsLocalPath(ReturnUrl) ? ReturnUrl! : "games");
+        }
+        catch (Exception ex)
+        {
+            _error = ApiErrors.Describe(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // Only follow redirects that stay on this site.
+    private static bool IsLocalPath(string? url) =>
+        !string.IsNullOrWhiteSpace(url) && url.StartsWith('/') && !url.StartsWith("//") && !url.StartsWith("/\\");
+
+    private sealed class LoginModel
+    {
+        [Required, EmailAddress]
+        public string Email { get; set; } = "";
+
+        [Required]
+        public string Password { get; set; } = "";
+    }
+}

@@ -10,10 +10,12 @@ namespace GameStore.Api.Controllers;
 [Produces("application/json")]
 public class GenresController(IGenreService genres) : ControllerBase
 {
+    [AllowAnonymous]
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<GenreDto>>> GetAll(CancellationToken ct) =>
         Ok(await genres.GetAllAsync(ct));
 
+    [AllowAnonymous]
     [HttpGet("{id:int}")]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<GenreDto>> GetById(int id, CancellationToken ct) =>

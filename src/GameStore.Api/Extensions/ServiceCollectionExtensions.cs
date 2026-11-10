@@ -1,4 +1,6 @@
 using System.Text;
+using GameStore.Api.AI.DTOs;
+using GameStore.Api.AI.Interfaces;
 using GameStore.Api.Data;
 using GameStore.Api.Entities;
 using GameStore.Api.Infrastructure;
@@ -8,6 +10,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using GameStore.Api.AI.services;
+using GameStore.Api.AI.Services;
 using Microsoft.Extensions.Options;
 
 namespace GameStore.Api.Extensions;
@@ -27,7 +30,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IStudioService, StudioService>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAuthService, AuthService>();
-        
+        services.AddScoped<ICsvGameParser, CsvGameParser>();
         services.AddSingleton(TimeProvider.System);
         
         services.Configure<OllamaOptions>(
@@ -40,11 +43,12 @@ public static class ServiceCollectionExtensions
             client.BaseAddress = new Uri(
                 options.BaseUrl.TrimEnd('/') + "/");
 
-            client.Timeout = TimeSpan.FromMinutes(3);
+            client.Timeout = TimeSpan.FromMinutes(6);
         });
 
-        services.AddScoped<IGameAssistantService, GameAssistantService>();
+        services.AddScoped<IDocumentExtractionService, DocumentExtractionService>();
 
+        services.AddScoped<IGameImportService, GameImportService>();
 
         services.AddIdentityCore<ApplicationUser>(o =>
             {

@@ -10,7 +10,7 @@ GET {{host}}/api/genres
 POST {{host}}/api/genres
 Content-Type: application/json
 
-{ "name": "Strategy" }
+{ "name": "Action" }
 
 ### All studios
 GET {{host}}/api/studios

@@ -69,7 +69,7 @@ public class GameService(AppDbContext db, ILogger<GameService> logger) : IGameSe
             Genre = genre,
             Studio = studio,
             Price = request.Price,
-            ReleaseDate = request.ReleaseDate
+            ReleaseDate = (DateOnly)request.ReleaseDate!
         };
 
         db.Games.Add(game);

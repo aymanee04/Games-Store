@@ -1,0 +1,157 @@
+/* ---------- Design tokens ---------- */
+:root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --border: #dfe3e8;
+    --text: #1f2933;
+    --muted: #667085;
+    --accent: #2f5bd2;
+    --accent-hover: #2549ad;
+    --accent-soft: #eaf0fd;
+    --danger: #c0362c;
+    --danger-soft: #fdecea;
+    --success: #1a7f4b;
+    --success-soft: #e6f4ec;
+    --radius: 8px;
+}
+
+/* ---------- Base ---------- */
+html, body { height: 100%; }
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+h1 { font-size: 1.5rem; font-weight: 600; margin: 0 0 1.25rem; }
+h1:focus { outline: none; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-hover); text-decoration: underline; }
+
+code { background: #eceef2; color: var(--text); padding: .1rem .35rem; border-radius: 4px; font-size: .85em; }
+
+.muted { color: var(--muted); }
+.hint { font-size: .85rem; color: var(--muted); margin: .5rem 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* ---------- Layout ---------- */
+.topbar { background: var(--surface); border-bottom: 1px solid var(--border); }
+
+.topbar-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 1.25rem;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.brand { font-weight: 700; font-size: 1.1rem; color: var(--text); }
+.brand:hover { color: var(--text); text-decoration: none; }
+.brand span { color: var(--accent); }
+
+.nav-links { display: flex; gap: .25rem; }
+.nav-links a { padding: .35rem .75rem; border-radius: 6px; color: var(--muted); font-weight: 500; }
+.nav-links a:hover { background: #f0f2f5; color: var(--text); text-decoration: none; }
+.nav-links a.active { background: var(--accent-soft); color: var(--accent); }
+
+.auth-status { margin-left: auto; display: flex; align-items: center; gap: 1rem; font-size: .9rem; }
+.auth-name { color: var(--muted); }
+
+.content { max-width: 1100px; margin: 0 auto; padding: 1.75rem 1.25rem 3rem; }
+
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; }
+.panel.narrow { max-width: 24rem; }
+
+/* ---------- Forms ---------- */
+label { display: block; margin: 0 0 .25rem; font-size: .85rem; font-weight: 500; }
+
+input:not([type=checkbox]):not([type=radio]):not([type=file]),
+select,
+textarea {
+    font: inherit;
+    padding: .45rem .6rem;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid #c9ced6;
+    border-radius: 6px;
+}
+
+input:focus, select:focus, textarea:focus {
+    outline: 2px solid rgba(47, 91, 210, .25);
+    border-color: var(--accent);
+}
+
+input:disabled, select:disabled, textarea:disabled { background: #f3f4f6; }
+input.invalid, select.invalid { border-color: var(--danger); }
+.validation-message { color: var(--danger); font-size: .8rem; margin-top: .2rem; }
+
+.login-form input { width: 100%; box-sizing: border-box; margin-bottom: .4rem; }
+.login-form label { margin-top: .75rem; }
+.login-form button { margin-top: 1rem; width: 100%; }
+
+/* ---------- Buttons ---------- */
+button {
+    font: inherit;
+    padding: .45rem .9rem;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid #c9ced6;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+button:hover:not(:disabled) { background: #f2f4f7; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+
+button.primary, .login-form button[type=submit] { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:hover:not(:disabled), .login-form button[type=submit]:hover:not(:disabled) { background: var(--accent-hover); }
+
+button.danger { padding: .3rem .55rem; color: var(--danger); }
+button.danger:hover:not(:disabled) { background: var(--danger-soft); }
+
+button.link { background: none; border: 0; padding: 0; color: var(--accent); }
+button.link:hover:not(:disabled) { background: none; text-decoration: underline; }
+
+/* ---------- Tables ---------- */
+.table-wrap { overflow-x: auto; margin: 1rem 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.table-wrap table { width: 100%; border-collapse: collapse; }
+.table-wrap th { background: #f9fafb; color: var(--muted); font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.table-wrap th, .table-wrap td { text-align: left; padding: .6rem .85rem; border-bottom: 1px solid #edf0f3; }
+.table-wrap tbody tr:last-child td { border-bottom: 0; }
+
+/* ---------- Feedback ---------- */
+.error { color: var(--danger); }
+
+.banner { padding: .6rem .9rem; border-radius: 6px; margin: .75rem 0; display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+.banner.error { background: var(--danger-soft); color: var(--danger); }
+.banner.busy { background: var(--accent-soft); }
+.banner.success { background: var(--success-soft); color: var(--success); }
+
+.spinner { width: 1rem; height: 1rem; border: 2px solid #c9ced6; border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- Blazor built-ins ---------- */
+#blazor-error-ui {
+    display: none;
+    position: fixed;
+    inset: auto 0 0 0;
+    padding: .6rem 1.25rem;
+    background: #fff4c2;
+    border-top: 1px solid #e6d58a;
+    z-index: 1000;
+}
+
+#blazor-error-ui .dismiss { cursor: pointer; position: absolute; right: .75rem; top: .5rem; }
+
+.loading-progress { position: relative; display: block; width: 6rem; height: 6rem; margin: 20vh auto 1rem auto; }
+.loading-progress circle { fill: none; stroke: #e1e4e8; stroke-width: .5rem; transform-origin: 50% 50%; transform: rotate(-90deg); }
+.loading-progress circle:last-child { stroke: var(--accent); stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%; transition: stroke-dasharray .05s ease-in-out; }
+.loading-progress-text { position: absolute; text-align: center; font-weight: 600; inset: calc(20vh + 2.5rem) 0 auto 0; }
+.loading-progress-text:after { content: var(--blazor-load-percentage-text, "Loading"); }

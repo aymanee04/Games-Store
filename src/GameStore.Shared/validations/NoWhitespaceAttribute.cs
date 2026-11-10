@@ -1,4 +1,4 @@
-﻿namespace GameStore.Api.validations;
+﻿namespace GameStore.Shared.validations;
 
 using System.ComponentModel.DataAnnotations;
 

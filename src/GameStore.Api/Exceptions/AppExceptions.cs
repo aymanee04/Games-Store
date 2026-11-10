@@ -18,3 +18,6 @@ public sealed class ConflictException(string message)
 
 public sealed class UnauthorizedException(string message)
     : AppException(message, StatusCodes.Status401Unauthorized, "Unauthorized");
+
+public sealed class ServiceUnavailableException(string message)
+    : AppException(message, StatusCodes.Status503ServiceUnavailable, "Service unavailable");
