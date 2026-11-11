@@ -9,7 +9,8 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddCors(o => o.AddPolicy("Client", p => p
     .WithOrigins("http://localhost:5014")
     .AllowAnyHeader()
-    .AllowAnyMethod()));
+    .AllowAnyMethod()
+    .AllowCredentials()));
 var app = builder.Build();
 app.UseCors("Client");
 app.UseExceptionHandler();

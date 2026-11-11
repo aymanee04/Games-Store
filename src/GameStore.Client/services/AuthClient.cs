@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using GameStore.Shared.Dtos;
+using Microsoft.AspNetCore.Components.WebAssembly.Http;
 
 namespace GameStore.Client.Services;
 
@@ -9,10 +10,7 @@ public class AuthClient
 {
     private readonly TokenStore _store;
     private readonly ClientAuthStateProvider _state;
-    private readonly HttpClient _plainHttp;   // no auth handler: used for login/refresh/logout only
-
-    // Refresh tokens rotate and the API revokes the whole session if one is reused,
-    // so two parallel requests must never refresh at the same time.
+    private readonly HttpClient _plainHttp;
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
 
     public AuthClient(TokenStore store, ClientAuthStateProvider state, ApiSettings settings)
@@ -26,7 +24,7 @@ public class AuthClient
     {
         try
         {
-            using var response = await _plainHttp.PostAsJsonAsync("api/auth/login", new LoginRequest(email, password));
+            using var response = await PostWithCookiesAsync("api/auth/login", new LoginRequest(email, password));
             await ApiErrors.EnsureSuccessAsync(response);
 
             var auth = await response.Content.ReadFromJsonAsync<AuthResponse>()
@@ -43,49 +41,77 @@ public class AuthClient
 
     public async Task LogoutAsync()
     {
-        var auth = await _store.GetAsync();
-
-        if (auth is not null)
+        try
         {
-            try
-            {
-                using var _ = await _plainHttp.PostAsJsonAsync("api/auth/logout", new LogoutRequest(auth.RefreshToken));
-            }
-            catch (HttpRequestException)
-            {
-                // Server unreachable: still sign out locally.
-            }
+            using var _ = await PostWithCookiesAsync("api/auth/logout", null);
+        }
+        catch (HttpRequestException)
+        {
+            // Server unreachable: still sign out locally.
         }
 
         await SignOutLocallyAsync();
     }
 
-    /// <summary>Returns a usable access token, refreshing it first if it is about to expire.</summary>
+    public async Task<bool> TryRefreshOnStartupAsync()
+    {
+        var auth = await _store.GetAsync();
+        if (auth is null || string.IsNullOrWhiteSpace(auth.AccessToken))
+            return false;
+
+        if (!IsExpiring(auth))
+            return true;
+
+        await _refreshLock.WaitAsync();
+        try
+        {
+            auth = await _store.GetAsync();
+            if (auth is null || string.IsNullOrWhiteSpace(auth.AccessToken))
+                return false;
+
+            if (!IsExpiring(auth))
+                return true;
+
+            using var response = await PostWithCookiesAsync("api/auth/refresh", null);
+            if (!response.IsSuccessStatusCode)
+            {
+                await SignOutLocallyAsync();
+                return false;
+            }
+
+            var fresh = await response.Content.ReadFromJsonAsync<AuthResponse>();
+            if (fresh is null)
+            {
+                await SignOutLocallyAsync();
+                return false;
+            }
+
+            await _store.SetAsync(fresh);
+            _state.NotifyChanged();
+            return true;
+        }
+        finally
+        {
+            _refreshLock.Release();
+        }
+    }
+
     public async Task<string?> GetValidAccessTokenAsync()
     {
         var auth = await _store.GetAsync();
-        if (auth is null) return null;
+        if (auth is null || string.IsNullOrWhiteSpace(auth.AccessToken)) return null;
         if (!IsExpiring(auth)) return auth.AccessToken;
 
         await _refreshLock.WaitAsync();
         try
         {
-            // Someone else may have refreshed while we were waiting.
             auth = await _store.GetAsync();
-            if (auth is null) return null;
+            if (auth is null || string.IsNullOrWhiteSpace(auth.AccessToken)) return null;
             if (!IsExpiring(auth)) return auth.AccessToken;
-
-            if (auth.RefreshTokenExpiresAtUtc <= DateTime.UtcNow)
-            {
-                await SignOutLocallyAsync();
-                return null;
-            }
 
             try
             {
-                using var response = await _plainHttp.PostAsJsonAsync(
-                    "api/auth/refresh", new RefreshRequest(auth.RefreshToken));
-
+                using var response = await PostWithCookiesAsync("api/auth/refresh", null);
                 if (!response.IsSuccessStatusCode)
                 {
                     await SignOutLocallyAsync();
@@ -100,11 +126,11 @@ public class AuthClient
                 }
 
                 await _store.SetAsync(fresh);
+                _state.NotifyChanged();
                 return fresh.AccessToken;
             }
             catch (HttpRequestException)
             {
-                // Server unreachable: let the real request fail with its own error.
                 return auth.AccessToken;
             }
         }
@@ -130,5 +156,13 @@ public class AuthClient
     {
         await _store.ClearAsync();
         _state.NotifyChanged();
+    }
+    
+    private Task<HttpResponseMessage> PostWithCookiesAsync(string url, object? body = null)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Post, url);
+        if (body is not null) req.Content = JsonContent.Create(body);
+        req.SetBrowserRequestCredentials(BrowserRequestCredentials.Include);
+        return _plainHttp.SendAsync(req);
     }
 }
