@@ -5,13 +5,11 @@ using Microsoft.JSInterop;
 namespace GameStore.Client.Services;
 
 /// <summary>
-/// Keeps the login response in the browser's localStorage so a page refresh does
-/// not log the admin out. (localStorage is readable by any script on the page, so
-/// keep the app free of untrusted scripts / XSS.)
+/// Keeps the access token in browser storage, while the refresh token stays in an HttpOnly cookie.
 /// </summary>
 public class TokenStore(IJSRuntime js)
 {
-    private const string Key = "gamestore.auth";
+    private const string Key = "gamestore.access";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     public async Task<AuthResponse?> GetAsync()
@@ -19,7 +17,16 @@ public class TokenStore(IJSRuntime js)
         try
         {
             var raw = await js.InvokeAsync<string?>("localStorage.getItem", Key);
-            return string.IsNullOrWhiteSpace(raw) ? null : JsonSerializer.Deserialize<AuthResponse>(raw, Json);
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+
+            var accessToken = JsonSerializer.Deserialize<string>(raw, Json);
+            if (string.IsNullOrWhiteSpace(accessToken)) return null;
+
+            return new AuthResponse(
+                AccessToken: accessToken,
+                AccessTokenExpiresAtUtc: DateTime.MinValue,
+                RefreshToken: string.Empty,
+                RefreshTokenExpiresAtUtc: DateTime.MinValue);
         }
         catch (JsonException)
         {
@@ -28,7 +35,7 @@ public class TokenStore(IJSRuntime js)
     }
 
     public async Task SetAsync(AuthResponse auth) =>
-        await js.InvokeVoidAsync("localStorage.setItem", Key, JsonSerializer.Serialize(auth, Json));
+        await js.InvokeVoidAsync("localStorage.setItem", Key, JsonSerializer.Serialize(auth.AccessToken, Json));
 
     public async Task ClearAsync() =>
         await js.InvokeVoidAsync("localStorage.removeItem", Key);

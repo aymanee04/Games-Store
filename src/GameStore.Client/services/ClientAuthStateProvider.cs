@@ -11,11 +11,7 @@ public class ClientAuthStateProvider(TokenStore store) : AuthenticationStateProv
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
         var auth = await store.GetAsync();
-        if (auth is null) return Anonymous;
-
-        // An expired access token is fine while the refresh token is still valid:
-        // AuthTokenHandler renews it on the next API call.
-        if (auth.RefreshTokenExpiresAtUtc <= DateTime.UtcNow) return Anonymous;
+        if (auth is null || string.IsNullOrWhiteSpace(auth.AccessToken)) return Anonymous;
 
         try
         {
