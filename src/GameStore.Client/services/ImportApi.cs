@@ -11,14 +11,6 @@ public class ImportApi(HttpClient http)
 {
     public const long MaxFileBytes = 5 * 1024 * 1024;
 
-    public async Task<List<ExtractedGameResponse>> ExtractFromPromptAsync(string prompt, CancellationToken ct = default)
-    {
-        using var response = await http.PostAsJsonAsync(
-            "api/ai/games/import/extract-from-prompt", new { prompt }, ct);
-
-        return await ReadGamesAsync(response, ct);
-    }
-
     public async Task<List<ExtractedGameResponse>> ExtractFromFileAsync(IBrowserFile file, CancellationToken ct = default)
     {
         using var content = new MultipartFormDataContent();
@@ -28,7 +20,7 @@ public class ImportApi(HttpClient http)
         fileContent.Headers.ContentType = new MediaTypeHeaderValue("text/csv");
         content.Add(fileContent, "File", file.Name);   // field name must match ExtractGamesRequest.File
 
-        using var response = await http.PostAsync("api/ai/games/import/extract", content, ct);
+        using var response = await http.PostAsync("api/ai/extractCsv", content, ct);
         return await ReadGamesAsync(response, ct);
     }
 
@@ -36,7 +28,7 @@ public class ImportApi(HttpClient http)
     {
         var request = new ImportConfirmRequest(rows.Select(r => r.ToPayload()).ToList());
 
-        using var response = await http.PostAsJsonAsync("api/ai/games/import/confirm", request, ct);
+        using var response = await http.PostAsJsonAsync("api/ai/confirm", request, ct);
         await ApiErrors.EnsureSuccessAsync(response);
 
         return await response.Content.ReadFromJsonAsync<List<GameDto>>(cancellationToken: ct) ?? [];

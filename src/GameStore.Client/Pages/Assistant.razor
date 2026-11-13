@@ -1,0 +1,304 @@
+﻿@page "/admin/assistant"
+@using System.Globalization
+@using GameStore.Client.Models
+@using GameStore.Client.Services
+@implements IDisposable
+@inject AssistantApi Assistantt
+
+<PageTitle>Assistantt</PageTitle>
+
+<AuthorizeView Roles="Admin">
+    <Authorized>
+        <h1>Admin assistant</h1>
+
+        <p class="hint">
+            Ask in plain language, for example: <em>games from ubisoft released before 2026</em>,
+            <em>lower the price of all ubisoft games by 10%</em>. <br/>
+            Changes are only proposed. Nothing is saved until you confirm.
+        </p>
+
+        @if (_error is not null)
+        {
+            <div class="banner error" role="alert">
+                @_error
+                @if (_unauthorized)
+                {
+                    <a href="login?returnUrl=%2Fadmin%2Fassistant">Log in again</a>
+                }
+            </div>
+        }
+
+        @if (_busy)
+        {
+            <div class="banner busy" role="status">
+                <span class="spinner" aria-hidden="true"></span>
+                <span>@_busyText</span>
+                @if (_cts is not null)
+                {
+                    <button type="button" @onclick="Cancel">Cancel</button>
+                }
+            </div>
+        }
+
+        <label for="message">Your request</label>
+        <textarea id="message" rows="3" maxlength="1000" disabled="@_busy"
+                  @bind="_message" @bind:event="oninput"></textarea>
+
+        <div class="actions">
+            <button type="button" class="primary" @onclick="AskAsync"
+                    disabled="@(_busy || _message.Trim().Length < 3)">Ask</button>
+            <span class="hint">@_message.Length / 1000</span>
+        </div>
+
+        @if (_response is not null)
+        {
+            <h2>Reply</h2>
+            <p class="reply">@_response.Message</p>
+
+            @if (_response.Games is { Count: > 0 })
+            {
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Name</th><th>Genre</th><th>Studio</th><th>Price</th><th>Release date</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var game in _response.Games)
+                            {
+                                <tr>
+                                    <td>@Pretty(game.Name)</td>
+                                    <td>@Pretty(game.Genre)</td>
+                                    <td>@Pretty(game.Studio)</td>
+                                    <td>$@game.Price.ToString("0.00", CultureInfo.InvariantCulture)</td>
+                                    <td>@game.ReleaseDate.ToString("yyyy-MM-dd")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+
+        @if (_items.Count > 0)
+        {
+            <h2>Proposed changes (not saved yet)</h2>
+
+            @foreach (var item in _items)
+            {
+                <div class="proposal panel">
+                    <h3>@Title(item.Proposal)</h3>
+
+                    <table class="changes">
+                        <thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead>
+                        <tbody>
+                            @foreach (var change in item.Proposal.Changes)
+                            {
+                                <tr>
+                                    <td>@change.Field</td>
+                                    <td>@(change.Before is null ? "—" : Show(change))</td>
+                                    <td>@ShowAfter(change)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+
+                    <div class="actions">
+                        @if (item.State == ItemState.Saved)
+                        {
+                            <span class="saved">Saved</span>
+                        }
+                        else
+                        {
+                            <button type="button" class="primary" @onclick="() => ConfirmAsync(item)"
+                                    disabled="@_busy">Confirm</button>
+                        }
+
+                        @if (item.State == ItemState.Failed)
+                        {
+                            <span class="error">@item.Error</span>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="actions">
+                @if (PendingCount > 0)
+                {
+                    <button type="button" class="primary" @onclick="ConfirmAllAsync" disabled="@_busy">
+                        Confirm all (@PendingCount)
+                    </button>
+                    <button type="button" @onclick="Discard" disabled="@_busy">Discard</button>
+                }
+                else
+                {
+                    <span class="saved">All changes saved.</span>
+                    <a href="games">View all games</a>
+                }
+            </div>
+        }
+    </Authorized>
+
+    <NotAuthorized>
+        <h1>Admin assistant</h1>
+        @if (context.User.Identity?.IsAuthenticated == true)
+        {
+            <p>Your account does not have the Admin role, so you cannot use the assistant.</p>
+        }
+        else
+        {
+            <p>You need to <a href="login?returnUrl=%2Fadmin%2Fassistant">log in</a> as an admin to use the assistant.</p>
+        }
+    </NotAuthorized>
+
+    <Authorizing>
+        <p>Checking your session…</p>
+    </Authorizing>
+</AuthorizeView>
+
+@code {
+    private enum ItemState { Pending, Saved, Failed }
+
+    private sealed class ProposalItem(GameProposal proposal)
+    {
+        public GameProposal Proposal { get; } = proposal;
+        public ItemState State { get; set; } = ItemState.Pending;
+        public string? Error { get; set; }
+    }
+
+    private string _message = "";
+    private AssistantResponse? _response;
+    private List<ProposalItem> _items = [];
+
+    private bool _busy;
+    private string _busyText = "";
+    private string? _error;
+    private bool _unauthorized;
+    private CancellationTokenSource? _cts;
+
+    private int PendingCount => _items.Count(i => i.State != ItemState.Saved);
+
+    private async Task AskAsync()
+    {
+        _error = null;
+        _unauthorized = false;
+        _busy = true;
+        _busyText = "Thinking… this can take a minute or two.";
+
+        var cts = _cts = new CancellationTokenSource();
+
+        try
+        {
+            var response = await Assistantt.AskAsync(_message.Trim(), cts.Token);
+
+            _response = response;
+            _items = (response.Proposals ?? []).Select(p => new ProposalItem(p)).ToList();
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            _error = "Cancelled.";
+        }
+        catch (Exception ex)
+        {
+            SetError(ex);
+        }
+        finally
+        {
+            _busy = false;
+            _cts = null;
+            cts.Dispose();
+        }
+    }
+
+    private void Cancel() => _cts?.Cancel();
+
+    private async Task ConfirmAsync(ProposalItem item)
+    {
+        _error = null;
+        _unauthorized = false;
+        _busy = true;
+        _busyText = "Saving…";
+
+        try
+        {
+            await SaveAsync(item);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ConfirmAllAsync()
+    {
+        _error = null;
+        _unauthorized = false;
+        _busy = true;
+        _busyText = "Saving…";
+
+        try
+        {
+            foreach (var item in _items.Where(i => i.State != ItemState.Saved).ToList())
+                await SaveAsync(item);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // One proposal = one normal API call (POST /api/games or PUT /api/games/{id}).
+    private async Task SaveAsync(ProposalItem item)
+    {
+        try
+        {
+            await Assistantt.ConfirmAsync(item.Proposal);
+            item.State = ItemState.Saved;
+            item.Error = null;
+        }
+        catch (Exception ex)
+        {
+            item.State = ItemState.Failed;
+            item.Error = ApiErrors.Describe(ex);
+            _unauthorized = ex is ApiException { StatusCode: System.Net.HttpStatusCode.Unauthorized };
+        }
+    }
+
+    private void Discard()
+    {
+        _items = [];
+        _error = null;
+    }
+
+    // ---------- helpers ----------
+    private void SetError(Exception ex)
+    {
+        _error = ApiErrors.Describe(ex);
+        _unauthorized = ex is ApiException { StatusCode: System.Net.HttpStatusCode.Unauthorized };
+    }
+
+    private static string Title(GameProposal p)
+    {
+        if (p.Action == "create")
+            return $"Add: {Pretty(p.Payload?.Name ?? "")}";
+
+        if (p.Action== "delete")
+        {
+            var name = p.Changes.FirstOrDefault(c => c.Field == "Status")?.Before ?? p.Payload?.Name ?? "";
+            return $"Delete: {Pretty(name)}";
+        }
+
+        var original = p.Changes.FirstOrDefault(c => c.Field == "Name")?.Before ?? p.Payload?.Name ?? "";
+        return $"Update: {Pretty(original)}";
+    }
+
+    // Names, genres and studios are stored lower-case; show them like the game list does.
+    private static string Show(ProposedChange c) =>
+        c.Field is "Name" or "Genre" or "Studio" ? Pretty(c.Before ?? "") : c.Before ?? "";
+
+    private static string ShowAfter(ProposedChange c) =>
+        c.Field is "Name" or "Genre" or "Studio" ? Pretty(c.After) : c.After;
+
+    private static string Pretty(string value) => CultureInfo.CurrentCulture.TextInfo.ToTitleCase(value);
+
+    public void Dispose() => _cts?.Cancel();
+}

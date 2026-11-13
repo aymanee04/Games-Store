@@ -1,3 +1,4 @@
+#pragma warning disable SKEXP0070 // Ollama connector is marked experimental
 using System.Text;
 using GameStore.Api.AI.DTOs;
 using GameStore.Api.AI.Interfaces;
@@ -12,6 +13,8 @@ using Microsoft.IdentityModel.Tokens;
 using GameStore.Api.AI.services;
 using GameStore.Api.AI.Services;
 using Microsoft.Extensions.Options;
+using Microsoft.SemanticKernel;
+using GameStore.Api.AI.Filters;
 
 namespace GameStore.Api.Extensions;
 
@@ -36,15 +39,28 @@ public static class ServiceCollectionExtensions
         services.Configure<OllamaOptions>(
             configuration.GetSection(OllamaOptions.SectionName));
 
-        services.AddHttpClient<IOllamaService, OllamaService>((sp, client) =>
+        // ---- AI: Ollama client + Semantic Kernel ----
+        services.AddTransient<OllamaThinkHandler>();
+        services.AddHttpClient("Ollama", (sp, client) =>
         {
             var options = sp.GetRequiredService<IOptions<OllamaOptions>>().Value;
+            client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromMinutes(6); 
+        })
+            .AddHttpMessageHandler<OllamaThinkHandler>();
 
-            client.BaseAddress = new Uri(
-                options.BaseUrl.TrimEnd('/') + "/");
-
-            client.Timeout = TimeSpan.FromMinutes(6);
+        services.AddSingleton(sp =>
+        {
+            var options = sp.GetRequiredService<IOptions<OllamaOptions>>().Value;
+            var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient("Ollama");
+            return new OllamaSharp.OllamaApiClient(http, options.Model);
         });
+
+        services.AddKernel();              // registers Kernel (transient) + plugin/filter support
+        services.AddOllamaChatCompletion(); // IChatCompletionService, backed by the OllamaApiClient above
+        services.AddSingleton<IFunctionInvocationFilter, AiTimingFilter>();
+
+        services.AddScoped<IAdminAssistantService, AdminAssistantService>();
 
         services.AddScoped<IDocumentExtractionService, DocumentExtractionService>();
 

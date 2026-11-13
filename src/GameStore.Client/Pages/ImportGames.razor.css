@@ -1,10 +1,3 @@
-textarea { width: 100%; max-width: 40rem; box-sizing: border-box; }
-
-.tabs { display: flex; gap: .25rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
-.tabs button { background: none; border: 0; border-bottom: 3px solid transparent; border-radius: 0; padding: .5rem 1rem; color: var(--muted); }
-.tabs button:hover:not(:disabled) { background: none; color: var(--text); }
-.tabs button.active { border-bottom-color: var(--accent); color: var(--accent); font-weight: 600; }
-
 table.grid { min-width: 48rem; }
 .grid td { vertical-align: top; padding: .5rem; }
 .grid input, .grid select { width: 100%; box-sizing: border-box; padding: .35rem .45rem; }

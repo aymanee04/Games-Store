@@ -21,7 +21,8 @@ public class TokenService(IConfiguration configuration, TimeProvider timeProvide
         var audience = configuration["JWT_AUDIENCE"] ??
                        throw new InvalidOperationException("Jwt:Audience configuration is missing.");
 
-        var accessTokenMinutes = configuration.GetValue<int?>("Jwt:AccessTokenMinutes") ?? 15;
+        var accessTokenMinutes = configuration.GetValue<int?>("ACCESS_TOKEN_MINUTES") ??
+                                 throw new InvalidOperationException("Access token minutes is missing");
 
         var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
         var credentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);

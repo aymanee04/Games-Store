@@ -1,18 +1,19 @@
 ﻿using GameStore.Api.AI.DTOs;
 using GameStore.Api.AI.Interfaces;
+using GameStore.Shared.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GameStore.Api.AI.Controllers;
 
 [ApiController]
-[Route("api/ai/games/import")]
+[Route("api/ai")]
 [Authorize(Roles = "Admin")]
 public class GameImportController(
-    IGameImportService importService) : ControllerBase
+    IGameImportService importService, IAdminAssistantService assistant) : ControllerBase
 {
     /// <summary>Option 1: extract games from an uploaded CSV file.</summary>
-    [HttpPost("extract")]
+    [HttpPost("extractCsv")]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(List<ExtractedGameDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<ExtractedGameDto>>> Extract(
@@ -26,24 +27,19 @@ public class GameImportController(
         return Ok(games);
     }
 
-    /// <summary>Option 2: create game proposals from a text prompt.</summary>
-    [HttpPost("extract-from-prompt")]
+    [HttpPost("assistant/ask")]
     [Consumes("application/json")]
-    [ProducesResponseType(typeof(List<ExtractedGameDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(AssistantResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
-    public async Task<ActionResult<List<ExtractedGameDto>>> ExtractFromPrompt(
-        [FromBody] GenerateGameRequest request,
+    public async Task<ActionResult<AssistantResponse>> Ask(
+        [FromBody] AssistantRequest request,
         CancellationToken ct)
     {
-        var games = await importService.ExtractGamesFromPromptAsync(
-            request.Prompt,
-            ct);
-
-        return Ok(games);
+        var response = await assistant.HandleAsync(request.Message, ct);
+        return Ok(response);
     }
 
-    /// <summary>Both options end here: the admin reviews the list, then confirms.</summary>
     [HttpPost("confirm")]
     [ProducesResponseType(typeof(List<GameDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<GameDto>>> Confirm(

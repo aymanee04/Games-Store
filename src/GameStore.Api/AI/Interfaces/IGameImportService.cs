@@ -1,4 +1,5 @@
 ﻿using GameStore.Api.AI.DTOs;
+using GameStore.Shared.Dtos;
 
 namespace GameStore.Api.AI.Interfaces;
 
@@ -6,10 +7,6 @@ public interface IGameImportService
 {
     Task<List<ExtractedGameDto>> ExtractGamesAsync(
         IFormFile file,
-        CancellationToken ct);
-
-    Task<List<ExtractedGameDto>> ExtractGamesFromPromptAsync(
-        string prompt,
         CancellationToken ct);
 
     Task<List<GameDto>> ImportGamesAsync(

@@ -4,12 +4,12 @@ using GameStore.Api.AI.DTOs;
 using GameStore.Api.AI.Interfaces;
 using GameStore.Api.Exceptions;
 using GameStore.Api.Services;
+using GameStore.Shared.Dtos;
 
 namespace GameStore.Api.AI.Services;
 
 public class GameImportService(
     IDocumentExtractionService documentService,
-    IOllamaService ollamaService,
     IGenreService genreService,
     IStudioService studioService,
     IGameService gameService,
@@ -30,62 +30,16 @@ public class GameImportService(
         var genres = await genreService.GetAllAsync(ct);
         var studios = await studioService.GetAllAsync(ct);
 
+        logger.LogInformation(
+            "Extracted {Count} games from CSV file '{FileName}'",
+            games.Count, file.FileName);
+        
         return NormalizeNames(
             games,
             genres.Select(g => g.Name),
             studios.Select(s => s.Name));
     }
-
-    // ---------- Option 2: text prompt ----------
-    public async Task<List<ExtractedGameDto>> ExtractGamesFromPromptAsync(
-        string prompt,
-        CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(prompt))
-            throw new BadRequestException("The prompt cannot be empty.");
-
-        var genres = await genreService.GetAllAsync(ct);
-        var studios = await studioService.GetAllAsync(ct);
-
-        var genreNames = genres.Select(g => g.Name).ToList();
-        var studioNames = studios.Select(s => s.Name).ToList();
-
-        List<ExtractedGameDto> games;
-
-        try
-        {
-            games = await ollamaService.GenerateGamesAsync(
-                prompt.Trim(), genreNames, studioNames, ct);
-        }
-        catch (HttpRequestException ex)
-        {
-            logger.LogError(ex, "Could not reach Ollama");
-            throw new ServiceUnavailableException(
-                "The AI service is not reachable. Make sure Ollama is running.");
-        }
-        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
-        {
-            logger.LogError(ex, "Ollama request timed out");
-            throw new ServiceUnavailableException(
-                "The AI service took too long to respond. Try a shorter prompt.");
-        }
-        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
-        {
-            logger.LogWarning(ex, "Ollama returned an unusable response");
-            throw new BadRequestException(
-                "The AI could not turn that prompt into games. Try rephrasing it.");
-        }
-
-        if (games.Count == 0)
-            throw new BadRequestException(
-                "No games could be created from that prompt. Describe the game(s) in more detail.");
-
-        return NormalizeNames(
-            games.Take(MaxGamesPerImport),
-            genreNames,
-            studioNames);
-    }
-
+    
     // ---------- Shared by both options ----------
     public async Task<List<GameDto>> ImportGamesAsync(
         ImportGamesRequest request,
@@ -156,6 +110,10 @@ public class GameImportService(
             var created = await gameService.CreateAsync(gameRequest, ct);
             createdGames.Add(created);
         }
+        
+        logger.LogInformation(
+            "Imported {Count} games",
+            createdGames.Count);
 
         return createdGames;
     }

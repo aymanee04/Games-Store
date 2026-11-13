@@ -28,5 +28,6 @@ builder.Services.AddScoped(sp => new HttpClient(
 
 builder.Services.AddScoped<StoreApi>();
 builder.Services.AddScoped<ImportApi>();
+builder.Services.AddScoped<AssistantApi>();
 
 await builder.Build().RunAsync();

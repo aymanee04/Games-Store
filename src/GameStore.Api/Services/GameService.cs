@@ -18,6 +18,33 @@ public class GameService(AppDbContext db, ILogger<GameService> logger) : IGameSe
             query = query.Where(g => g.GenreId == parameters.GenreId);
         }
 
+        if (parameters.StudioId is not null)
+        {
+            query = query.Where(g => g.StudioId == parameters.StudioId);
+        }
+
+        if (parameters.MinPrice is { } minPrice)
+        {
+            query = query.Where(g => g.Price >= minPrice);
+        }
+
+        if (parameters.MaxPrice is { } maxPrice)
+        {
+            query = query.Where(g => g.Price <= maxPrice);
+        }
+
+        if (parameters.ReleasedAfterYear is { } afterYear)
+        {
+            var after = new DateOnly(afterYear, 12, 31);
+            query = query.Where(g => g.ReleaseDate > after);
+        }
+
+        if (parameters.ReleasedBeforeYear is { } beforeYear)
+        {
+            var before = new DateOnly(beforeYear, 1, 1);
+            query = query.Where(g => g.ReleaseDate < before);
+        }
+
         if (!string.IsNullOrWhiteSpace(parameters.Search))
         {
             var term = parameters.Search.Trim();

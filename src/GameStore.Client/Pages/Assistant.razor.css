@@ -1,0 +1,16 @@
+textarea { width: 100%; max-width: 40rem; box-sizing: border-box; }
+
+h2 { font-size: 1.15rem; margin: 1.5rem 0 .5rem; }
+h3 { font-size: 1rem; margin: 0 0 .5rem; }
+
+.reply { white-space: pre-wrap; margin: .25rem 0 .5rem; }
+
+.actions { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; margin-top: .75rem; }
+
+.proposal { margin-bottom: .75rem; }
+
+table.changes { border-collapse: collapse; width: 100%; max-width: 32rem; }
+table.changes th, table.changes td { text-align: left; padding: .3rem .6rem .3rem 0; border-bottom: 1px solid #edf0f3; }
+table.changes th { color: var(--muted); font-size: .75rem; font-weight: 600; text-transform: uppercase; }
+
+.saved { color: var(--success); font-weight: 600; }

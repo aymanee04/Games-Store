@@ -7,7 +7,8 @@
         <span class="auth-name">@context.User.Identity?.Name</span>
 
         <AuthorizeView Roles="Admin" Context="adminCtx">
-            <a href="/admin/import">Add games</a>
+            <a href="/admin/assistant">Assistant</a>
+            <a href="/admin/import">Import CSV</a>
         </AuthorizeView>
 
         <button type="button" @onclick="LogoutAsync">Log out</button>

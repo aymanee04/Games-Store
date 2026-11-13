@@ -7,11 +7,11 @@
 @inject ImportApi Import
 @inject StoreApi Store
 
-<PageTitle>Add games</PageTitle>
+<PageTitle>Import games</PageTitle>
 
 <AuthorizeView Roles="Admin">
     <Authorized>
-        <h1>Add games</h1>
+        <h1>Import games from a CSV file</h1>
 
         @if (_error is not null)
         {
@@ -38,39 +38,14 @@
 
         @if (_step == Step.Input)
         {
-            <div class="tabs" role="tablist">
-                <button type="button" role="tab" aria-selected="@(_mode == Mode.Prompt ? "true" : "false")"
-                        class="@(_mode == Mode.Prompt ? "active" : "")"
-                        disabled="@_busy" @onclick="() => _mode = Mode.Prompt">Describe with a prompt</button>
-                <button type="button" role="tab" aria-selected="@(_mode == Mode.Csv ? "true" : "false")"
-                        class="@(_mode == Mode.Csv ? "active" : "")"
-                        disabled="@_busy" @onclick="() => _mode = Mode.Csv">Upload a CSV file</button>
-            </div>
-
-            @if (_mode == Mode.Prompt)
-            {
-                <label for="prompt">Describe the game(s) you want to add</label>
-                <textarea id="prompt" rows="4" maxlength="1000" disabled="@_busy"
-                          @bind="_prompt" @bind:event="oninput"
-                          placeholder="e.g. Add 2 action RPGs by Ubisoft released in 2026, priced at 59.99"></textarea>
-                <p class="hint">
-                    @_prompt.Length / 1000. Details you leave out (price, date…) are proposed by the AI.
-                    You can edit everything on the next screen before anything is saved.
-                </p>
-                <button type="button" class="primary" @onclick="GenerateAsync"
-                        disabled="@(_busy || _prompt.Trim().Length < 5)">Generate games</button>
-            }
-            else
-            {
-                <label for="csv">CSV file (max 5 MB)</label>
-                <InputFile id="csv" accept=".csv" OnChange="OnFileChosen" disabled="@_busy" />
-                <p class="hint">
-                    Expected columns: <code>Name, GenreName, StudioName, Price, ReleaseDate</code>.
-                    You can review and edit the rows before anything is saved.
-                </p>
-                <button type="button" class="primary" @onclick="ExtractFileAsync"
-                        disabled="@(_busy || _file is null)">Extract games</button>
-            }
+            <label for="csv">CSV file (max 5 MB)</label>
+            <InputFile id="csv" accept=".csv" OnChange="OnFileChosen" disabled="@_busy" />
+            <p class="hint">
+                Expected columns: <code>Name, GenreName, StudioName, Price, ReleaseDate</code>.
+                You can review and edit the rows before anything is saved.
+            </p>
+            <button type="button" class="primary" @onclick="ExtractFileAsync"
+                    disabled="@(_busy || _file is null)">Extract games</button>
         }
         else if (_step == Step.Review)
         {
@@ -207,14 +182,14 @@
     </Authorized>
 
     <NotAuthorized>
-        <h1>Add games</h1>
+        <h1>Import games from a CSV file</h1>
         @if (context.User.Identity?.IsAuthenticated == true)
         {
-            <p>Your account does not have the Admin role, so you cannot add games.</p>
+            <p>Your account does not have the Admin role, so you cannot import games.</p>
         }
         else
         {
-            <p>You need to <a href="login?returnUrl=%2Fadmin%2Fimport">log in</a> as an admin to add games.</p>
+            <p>You need to <a href="login?returnUrl=%2Fadmin%2Fimport">log in</a> as an admin to import games.</p>
         }
     </NotAuthorized>
 
@@ -224,15 +199,12 @@
 </AuthorizeView>
 
 @code {
-    private enum Mode { Prompt, Csv }
     private enum Step { Input, Review, Done }
 
     private const int MaxRows = 50;   // same limit as the API
 
-    private Mode _mode = Mode.Prompt;
     private Step _step = Step.Input;
 
-    private string _prompt = "";
     private Microsoft.AspNetCore.Components.Forms.IBrowserFile? _file;
 
     private List<ImportRow> _rows = [];
@@ -263,12 +235,7 @@
         }
     }
 
-    // ---------- Step 1: get a list of games (prompt or CSV) ----------
-    private Task GenerateAsync() =>
-        RunExtractAsync(
-            "Generating games with AI… this runs on your machine and can take up to a minute.",
-            ct => Import.ExtractFromPromptAsync(_prompt.Trim(), ct));
-
+    // ---------- Step 1: get a list of games from the CSV file ----------
     private Task ExtractFileAsync() =>
         RunExtractAsync("Reading the CSV file…", ct => Import.ExtractFromFileAsync(_file!, ct));
 
@@ -375,7 +342,6 @@
         _step = Step.Input;
         _rows = [];
         _created = [];
-        _prompt = "";
         _file = null;
         _error = null;
         _unauthorized = false;
