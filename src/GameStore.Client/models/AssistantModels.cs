@@ -8,7 +8,8 @@ public record AssistantResponse(
     string Type,
     string Message,
     List<GameDto>? Games,
-    List<GameProposal>? Proposals);
+    List<GameProposal>? Proposals,
+    string? ConversationId);   // send it back with the next request to continue the chat
 
 /// <summary>
 /// One change the assistant prepared. Nothing is saved until the admin confirms:

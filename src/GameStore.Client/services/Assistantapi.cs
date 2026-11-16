@@ -6,9 +6,10 @@ namespace GameStore.Client.Services;
 /// <summary>Admin-only. The bearer token is added by AuthTokenHandler.</summary>
 public class AssistantApi(HttpClient http)
 {
-    public async Task<AssistantResponse> AskAsync(string message, CancellationToken ct = default)
+    public async Task<AssistantResponse> AskAsync(
+        string message, string? conversationId, CancellationToken ct = default)
     {
-        using var response = await http.PostAsJsonAsync("api/ai/assistant/ask", new { message }, ct);
+        using var response = await http.PostAsJsonAsync("api/ai/ask", new { message, conversationId }, ct);
         await ApiErrors.EnsureSuccessAsync(response);
 
         return await response.Content.ReadFromJsonAsync<AssistantResponse>(cancellationToken: ct)
@@ -24,7 +25,7 @@ public class AssistantApi(HttpClient http)
 
         using var request = new HttpRequestMessage(
             new HttpMethod(proposal.Method), proposal.Endpoint.TrimStart('/'));
-
+        
         if (proposal.Endpoint.Equals("DELETE", StringComparison.OrdinalIgnoreCase))
         {
             using var deleteResponse = await http.SendAsync(request, ct);

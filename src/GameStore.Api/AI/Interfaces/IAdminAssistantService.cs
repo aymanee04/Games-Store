@@ -8,5 +8,6 @@ public interface IAdminAssistantService
     /// Understands what the admin wrote (read / create / update), runs reads immediately
     /// and turns writes into a proposal for review. Never writes to the database.
     /// </summary>
-    Task<AssistantResponse> HandleAsync(string message, CancellationToken ct);
+    Task<AssistantResponse> HandleAsync(string message, string userId, string? conversationId, CancellationToken ct);
+    
 }

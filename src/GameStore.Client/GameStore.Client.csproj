@@ -11,6 +11,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.14" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.13" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.13" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.OpenAI" Version="1.82.0" />
     <PackageReference Include="OllamaSharp" Version="5.5.2" />
   </ItemGroup>
 

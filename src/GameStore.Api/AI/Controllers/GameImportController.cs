@@ -1,4 +1,5 @@
-﻿using GameStore.Api.AI.DTOs;
+﻿using System.Security.Claims;
+using GameStore.Api.AI.DTOs;
 using GameStore.Api.AI.Interfaces;
 using GameStore.Shared.Dtos;
 using Microsoft.AspNetCore.Authorization;
@@ -12,7 +13,6 @@ namespace GameStore.Api.AI.Controllers;
 public class GameImportController(
     IGameImportService importService, IAdminAssistantService assistant) : ControllerBase
 {
-    /// <summary>Option 1: extract games from an uploaded CSV file.</summary>
     [HttpPost("extractCsv")]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(List<ExtractedGameDto>), StatusCodes.Status200OK)]
@@ -27,7 +27,7 @@ public class GameImportController(
         return Ok(games);
     }
 
-    [HttpPost("assistant/ask")]
+    [HttpPost("ask")]
     [Consumes("application/json")]
     [ProducesResponseType(typeof(AssistantResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -36,7 +36,11 @@ public class GameImportController(
         [FromBody] AssistantRequest request,
         CancellationToken ct)
     {
-        var response = await assistant.HandleAsync(request.Message, ct);
+        var userId = User.FindFirstValue("sub")
+                     ?? User.FindFirstValue(ClaimTypes.NameIdentifier)
+                     ?? "unknown";
+ 
+        var response = await assistant.HandleAsync(request.Message, userId, request.ConversationId, ct);
         return Ok(response);
     }
 

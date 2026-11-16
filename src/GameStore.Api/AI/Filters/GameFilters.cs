@@ -18,15 +18,12 @@ internal sealed record GameFilters(
         || ReleasedAfterYear is not null || ReleasedBeforeYear is not null;
 }
 
-/// <summary>
 /// Turns what the model extracted (names) into the API's own GameQueryParameters (ids),
 /// so reads and bulk changes go through IGameService like every other caller.
-/// </summary>
 internal static class GameQueryBuilder
 {
-    /// <returns>The parameters, or null with <paramref name="error"/> set (e.g. unknown genre).</returns>
     public static GameQueryParameters? Build(
-        AssistantContext context, GameFilters f, int pageSize, out string? error)
+        AssistantContext context, GameFilters f, int pageSize, out string? error, int page = 1)
     {
         error = null;
         int? genreId = null;
@@ -65,7 +62,7 @@ internal static class GameQueryBuilder
             MaxPrice = f.MaxPrice,
             ReleasedAfterYear = f.ReleasedAfterYear is { } a ? Math.Clamp(a, 1, 9999) : null,
             ReleasedBeforeYear = f.ReleasedBeforeYear is { } b ? Math.Clamp(b, 1, 9999) : null,
-            Page = 1,
+            Page = Math.Max(page, 1),
             PageSize = pageSize
         };
     }

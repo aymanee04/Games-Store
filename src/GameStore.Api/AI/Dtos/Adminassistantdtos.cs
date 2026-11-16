@@ -6,7 +6,9 @@ namespace GameStore.Api.AI.DTOs;
 
 public record AssistantRequest(
     [Required, StringLength(1000, MinimumLength = 3)]
-    string Message);
+    string Message,
+    [StringLength(64)]
+    string? ConversationId = null);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum AssistantResponseType
@@ -23,7 +25,8 @@ public record AssistantResponse(
     AssistantResponseType Type,
     string Message,
     List<GameDto>? Games = null,
-    List<GameProposal>? Proposals = null);
+    List<GameProposal>? Proposals = null,
+    string? ConversationId = null);
 
 /// <summary>
 /// Everything the client needs to confirm a change through the EXISTING endpoints:

@@ -5,7 +5,7 @@
 @implements IDisposable
 @inject AssistantApi Assistantt
 
-<PageTitle>Assistantt</PageTitle>
+<PageTitle>Assistant</PageTitle>
 
 <AuthorizeView Roles="Admin">
     <Authorized>
@@ -13,8 +13,9 @@
 
         <p class="hint">
             Ask in plain language, for example: <em>games from ubisoft released before 2026</em>,
-            <em>lower the price of all ubisoft games by 10%</em>. <br/>
             Changes are only proposed. Nothing is saved until you confirm.
+            The assistant remembers the last few messages of this chat, so you can say things like
+            <em>make it 15 instead</em>. Use <strong>New chat</strong> to start fresh.
         </p>
 
         @if (_error is not null)
@@ -47,6 +48,7 @@
         <div class="actions">
             <button type="button" class="primary" @onclick="AskAsync"
                     disabled="@(_busy || _message.Trim().Length < 3)">Ask</button>
+            <button type="button" @onclick="NewChat" disabled="@_busy">New chat</button>
             <span class="hint">@_message.Length / 1000</span>
         </div>
 
@@ -174,6 +176,7 @@
     private string? _error;
     private bool _unauthorized;
     private CancellationTokenSource? _cts;
+    private string? _conversationId;   // set by the server on the first reply
 
     private int PendingCount => _items.Count(i => i.State != ItemState.Saved);
 
@@ -182,16 +185,18 @@
         _error = null;
         _unauthorized = false;
         _busy = true;
-        _busyText = "Thinking… this can take a minute or two.";
+        _busyText = "Thinking… this runs on your machine and can take a minute or two.";
 
         var cts = _cts = new CancellationTokenSource();
 
         try
         {
-            var response = await Assistantt.AskAsync(_message.Trim(), cts.Token);
+            var response = await Assistantt.AskAsync(_message.Trim(), _conversationId, cts.Token);
 
+            _conversationId = response.ConversationId;
             _response = response;
             _items = (response.Proposals ?? []).Select(p => new ProposalItem(p)).ToList();
+            _message = "";
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
@@ -210,6 +215,16 @@
     }
 
     private void Cancel() => _cts?.Cancel();
+
+    // Forget the conversation on the client; the server drops its copy after 30 idle minutes.
+    private void NewChat()
+    {
+        _conversationId = null;
+        _response = null;
+        _items = [];
+        _message = "";
+        _error = null;
+    }
 
     private async Task ConfirmAsync(ProposalItem item)
     {
@@ -280,12 +295,6 @@
     {
         if (p.Action == "create")
             return $"Add: {Pretty(p.Payload?.Name ?? "")}";
-
-        if (p.Action== "delete")
-        {
-            var name = p.Changes.FirstOrDefault(c => c.Field == "Status")?.Before ?? p.Payload?.Name ?? "";
-            return $"Delete: {Pretty(name)}";
-        }
 
         var original = p.Changes.FirstOrDefault(c => c.Field == "Name")?.Before ?? p.Payload?.Name ?? "";
         return $"Update: {Pretty(original)}";
