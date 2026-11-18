@@ -1,4 +1,5 @@
-﻿using GameStore.Api.AI.DTOs;
+﻿using System.Text.Json;
+using GameStore.Api.AI.DTOs;
 using GameStore.Api.AI.Interfaces;
 using GameStore.Api.AI.Plugins;
 using GameStore.Api.Exceptions;
@@ -51,10 +52,6 @@ public class AdminAssistantService(
     public async Task<AssistantResponse> HandleAsync(
         string message, string userId, string? conversationId, CancellationToken ct)
     {
-        var chatId = string.IsNullOrWhiteSpace(conversationId)
-            ? Guid.NewGuid().ToString("N")
-            : conversationId.Trim();
-
         var genres = (await genreService.GetAllAsync(ct)).Select(g => (g.Id, g.Name)).ToList();
         var studios = (await studioService.GetAllAsync(ct)).Select(s => (s.Id, s.Name)).ToList();
         var context = new AssistantContext(genres, studios);
@@ -64,7 +61,7 @@ public class AdminAssistantService(
         requestKernel.Plugins.AddFromObject(new GameChangePlugin(games, context), "changes");
 
         var history = new ChatHistory(SystemPrompt);
-        foreach (var turn in conversations.Get(userId, chatId))
+        foreach (var turn in await conversations.GetRecentAsync(userId, conversationId, ct))
         {
             history.AddUserMessage(turn.User);
             history.AddAssistantMessage(turn.Assistant);
@@ -136,12 +133,15 @@ public class AdminAssistantService(
                 context.Games);
         }
 
-        var remembered = context.Proposals.Count > 0
-            ? $"{response.Message} [{context.Proposals.Count} change proposal(s) prepared, waiting for the admin to confirm.]"
-            : response.Message;
+        // Save the exchange (the store starts a new conversation when the id is missing or unknown).
+        // The proposals are kept as a record of what the assistant suggested.
+        var proposalsJson = context.Proposals.Count > 0
+            ? JsonSerializer.Serialize(context.Proposals)
+            : null;
 
-        conversations.Add(userId, chatId, new ChatTurn(message.Trim(), remembered));
+        var savedId = await conversations.AddAsync(
+            userId, conversationId, new ChatTurn(message.Trim(), response.Message), proposalsJson, ct);
 
-        return response with { ConversationId = chatId };
+        return response with { ConversationId = savedId };
     }
 }

@@ -43,8 +43,7 @@ public static class ServiceCollectionExtensions
         
         services.AddSingleton<IFunctionInvocationFilter, AiTimingFilter>();
 
-        services.AddMemoryCache();
-        services.AddSingleton<IConversationStore, ConversationStore>();
+        services.AddScoped<IConversationStore, DbConversationStore>();
         services.AddScoped<IAdminAssistantService, AdminAssistantService>();
 
         services.AddScoped<IDocumentExtractionService, DocumentExtractionService>();

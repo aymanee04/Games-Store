@@ -11,6 +11,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<Genre> Genres => Set<Genre>();
     public DbSet<Studio> Studios => Set<Studio>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<Conversation> Conversations => Set<Conversation>();
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+    public DbSet<McpApiKey> McpApiKeys => Set<McpApiKey>();
+    public DbSet<McpAuditEntry> McpAuditEntries => Set<McpAuditEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

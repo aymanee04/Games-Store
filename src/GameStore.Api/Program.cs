@@ -1,10 +1,12 @@
 using DotNetEnv;
 using GameStore.Api.Extensions;
+using GameStore.Api.Mcp.Setup;
 Env.Load();
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddEnvironmentVariables();
 
 builder.Services.AddApplicationServices(builder.Configuration);
+builder.Services.AddGameStoreMcp();
 builder.Services.AddSwaggerGen();
 builder.Services.AddCors(o => o.AddPolicy("Client", p => p
     .WithOrigins("http://localhost:5014")
@@ -26,6 +28,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapControllers();
+app.MapGameStoreMcp();
 app.MapHealthChecks("/health");
 
 app.Run();
