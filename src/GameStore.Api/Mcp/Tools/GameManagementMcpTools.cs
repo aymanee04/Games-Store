@@ -1,8 +1,9 @@
 ﻿using System.ComponentModel;
 using GameStore.Api.AI.Plugins;
-using GameStore.Api.Mcp.Setup; // AssistantHelpers (internal, same assembly)
+using GameStore.Api.Mcp.Setup;
 using GameStore.Api.Services;
 using GameStore.Shared.Dtos;
+using Microsoft.AspNetCore.Authorization;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
@@ -27,6 +28,7 @@ public sealed class GameManagementMcpTools(
 
     // ------------------------------------------------------------------ create
     [McpServerTool(Name = "create_game", Destructive = false, Idempotent = false)]
+    [Authorize(Roles = "Admin")]   // read-only API keys (role McpReader) neither see nor can call this tool
     [Description("Adds a NEW game to the store. The genre and studio must already exist. "
                  + "Fails if a game with the same name already exists.")]
     public Task<GameDto> CreateGameAsync(
@@ -76,6 +78,7 @@ public sealed class GameManagementMcpTools(
 
     // ------------------------------------------------------------------ update
     [McpServerTool(Name = "update_game", Idempotent = true)]
+    [Authorize(Roles = "Admin")]   // read-only API keys (role McpReader) neither see nor can call this tool
     [Description("Changes an EXISTING game, found by its id (from search_games). "
                  + "Pass only the values to change; everything else stays as it is.")]
     public Task<GameDto> UpdateGameAsync(
@@ -162,6 +165,7 @@ public sealed class GameManagementMcpTools(
 
     // ------------------------------------------------------------------ delete
     [McpServerTool(Name = "delete_game", Destructive = true, Idempotent = true)]
+    [Authorize(Roles = "Admin")]   // read-only API keys (role McpReader) neither see nor can call this tool
     [Description("Permanently deletes ONE game. This cannot be undone. "
                  + "Both the id and the game's exact name are required, as a safety check.")]
     public Task<string> DeleteGameAsync(

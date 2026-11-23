@@ -32,10 +32,26 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICsvGameParser, CsvGameParser>();
         services.AddSingleton(TimeProvider.System);
         
+        var ollamaHttpClient = new HttpClient
+        {
+            BaseAddress = new Uri(
+                configuration["Ai:Ollama:BaseUrl"]
+                ?? "http://localhost:11434"),
+            Timeout = TimeSpan.FromMinutes(6)
+        };
+
         services.AddKernel()
+            .AddOllamaChatCompletion(
+                httpClient: ollamaHttpClient,
+                serviceId: "ollama",
+                modelId: configuration["OLLAMA_MODEL"]
+                         ?? throw new InvalidOperationException("OLLAMA_MODEL is missing."))
             .AddOpenAIChatCompletion(
-                modelId: configuration["GROQ_MODEL"] ?? throw new InvalidOperationException("GROQ_MODEL is missing."),
-                apiKey: configuration["GROQ_API_KEY"] ?? throw new InvalidOperationException("GROQ_API_KEY is missing."),
+                serviceId: "groq",
+                modelId: configuration["GROQ_MODEL"]
+                         ?? throw new InvalidOperationException("GROQ_MODEL is missing."),
+                apiKey: configuration["GROQ_API_KEY"] 
+                        ?? throw new InvalidOperationException("GROQ_API_KEY is missing."),
                 httpClient: new HttpClient
                 {
                     BaseAddress = new Uri("https://api.groq.com/openai/v1")

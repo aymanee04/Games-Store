@@ -1,9 +1,16 @@
 using DotNetEnv;
+using GameStore.Api.AI.McpTools;
 using GameStore.Api.Extensions;
 using GameStore.Api.Mcp.Setup;
 Env.Load();
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddEnvironmentVariables();
+builder.Services
+    .AddOptions<AssistantMcpOptions>()
+    .Bind(builder.Configuration.GetSection(AssistantMcpOptions.SectionName))
+    .Validate(o => !o.Enabled || !string.IsNullOrWhiteSpace(o.ApiKey),
+        "AssistantMcp:ApiKey is required when AssistantMcp:Enabled is true.")
+    .ValidateOnStart();
 
 builder.Services.AddApplicationServices(builder.Configuration);
 builder.Services.AddGameStoreMcp();
@@ -29,6 +36,6 @@ if (app.Environment.IsDevelopment())
 
 app.MapControllers();
 app.MapGameStoreMcp();
-app.MapHealthChecks("/health");
+    app.MapHealthChecks("/health");
 
 app.Run();

@@ -32,7 +32,6 @@ public class McpApiKeyService(
                 $"You already have {MaxActiveKeysPerUser} active API keys. Revoke one first.");
 
         // 256 random bits: guessing is not feasible, so a plain SHA-256 hash is enough here
-        // (no salt or slow hash needed, unlike passwords).
         var rawKey = McpApiKeyDefaults.KeyPrefix + WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
 
         var key = new McpApiKey
@@ -98,7 +97,7 @@ public class McpApiKeyService(
         if (!await users.IsInRoleAsync(key.User, "Admin"))
             return null;
 
-        // Record "last used", but not on every request (that would be a write per MCP call).
+        // Record "last used", but not on every request (that would be a (write) operation per MCP call).
         if (key.LastUsedAtUtc is null || now - key.LastUsedAtUtc > LastUsedGranularity)
         {
             await db.McpApiKeys

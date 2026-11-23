@@ -1,4 +1,5 @@
-﻿using GameStore.Api.Mcp.Audit;
+﻿using GameStore.Api.AI.McpTools;
+using GameStore.Api.Mcp.Audit;
 using GameStore.Api.Mcp.Auth;
 using GameStore.Api.Mcp.Prompts;
 using GameStore.Api.Mcp.Ressources;
@@ -14,6 +15,9 @@ public static class McpExtensions
     /// <summary>Registers the MCP server (tools, resources, prompts), API-key login and the audit log.</summary>
     public static IServiceCollection AddGameStoreMcp(this IServiceCollection services)
     {
+        // The assistant's own MCP client (it reads its catalog tools from the server below).
+        services.AddAssistantMcpClient();
+
         services.AddScoped<IMcpApiKeyService, McpApiKeyService>();
         services.AddScoped<IMcpAuditService, McpAuditService>();
 

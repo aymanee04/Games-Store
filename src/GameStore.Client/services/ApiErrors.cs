@@ -76,7 +76,7 @@ public static class ApiErrors
     public static string Describe(Exception ex) => ex switch
     {
         ApiException api => api.Message,
-        HttpRequestException => "Could not reach the server. Is the API running?",
+        HttpRequestException => "Could not reach the server.",
         TaskCanceledException => "The request took too long and was cancelled.",
         _ => "Something went wrong. Please try again."
     };

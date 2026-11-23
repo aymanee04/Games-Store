@@ -1,11 +1,13 @@
 ﻿using System.Text.Json;
 using GameStore.Api.AI.DTOs;
 using GameStore.Api.AI.Interfaces;
+using GameStore.Api.AI.McpTools;
 using GameStore.Api.AI.Plugins;
 using GameStore.Api.Exceptions;
 using GameStore.Api.Services;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
+using CaptureGamesFilter = GameStore.Api.AI.McpTools.CaptureGamesFilter;
 
 namespace GameStore.Api.AI.services;
 
@@ -14,8 +16,10 @@ public class AdminAssistantService(
     IGameService games,
     IGenreService genreService,
     IStudioService studioService,
+    IMcpToolProvider mcpTools,
     IConversationStore conversations,
-    ILogger<AdminAssistantService> logger) : IAdminAssistantService
+    ILogger<AdminAssistantService> logger,
+    IConfiguration configuration) : IAdminAssistantService
 {
     private const string SystemPrompt = """
         You are the admin assistant of a game store. Answer in the language the admin writes in.
@@ -49,18 +53,80 @@ public class AdminAssistantService(
         - Keep answers short.
         """;
 
+    private static readonly string[] Providers = ["ollama", "groq"];
+
+    private string ResolveProvider(string? requested = null)
+    {
+        // Your json uses "Ai", so prefer this exact path
+        var configured = configuration["Ai:Provider"]
+                         ?? throw new InvalidOperationException("Ai:Provider is missing.");
+
+        var provider = (requested ?? configured).Trim().ToLowerInvariant();
+
+        return Providers.Contains(provider)
+            ? provider
+            : throw new BadRequestException(
+                $"Unknown AI provider '{provider}'. Use one of: {string.Join(", ", Providers)}.");
+    }
+
+    private static PromptExecutionSettings CreateSettings(string provider) => new()
+    {
+        FunctionChoiceBehavior = FunctionChoiceBehavior.Auto(),
+        ExtensionData = provider == "ollama"
+            ? new Dictionary<string, object>
+            {
+                ["temperature"] = 0,
+                ["num_ctx"] = 4096,
+                ["keep_alive"] = "30m"
+            }
+            : new Dictionary<string, object>
+            {
+                ["temperature"] = 0
+            }
+    };
+    
     public async Task<AssistantResponse> HandleAsync(
         string message, string userId, string? conversationId, CancellationToken ct)
     {
         var genres = (await genreService.GetAllAsync(ct)).Select(g => (g.Id, g.Name)).ToList();
         var studios = (await studioService.GetAllAsync(ct)).Select(s => (s.Id, s.Name)).ToList();
         var context = new AssistantContext(genres, studios);
+        
 
         var requestKernel = kernel.Clone();
-        requestKernel.Plugins.AddFromObject(new GameCatalogPlugin(games, context), "catalog");
+
+        // Read tools from MCP: this app's own /mcp endpoint, reached with a read-only API key.
+        // The list is empty when the feature is off or the server is unreachable. Then the local
+        // search tool below is used, so the assistant keeps working either way.
+        var mcpFunctions = await mcpTools.GetFunctionsAsync(ct);
+        var searchViaMcp = mcpFunctions.Any(f => f.Name == "search_games");
+
+        var catalog = KernelPluginFactory.CreateFromObject(new GameCatalogPlugin(games, context), "catalog");
+
+        // Never offer the model two search tools: drop the local one when MCP provides it.
+        requestKernel.Plugins.Add(searchViaMcp
+            ? KernelPluginFactory.CreateFromFunctions(
+                catalog.Name, catalog.Description, catalog.Where(f => f.Name != "search_games"))
+            : catalog);
+
+        if (mcpFunctions.Count > 0)
+        {
+            requestKernel.Plugins.AddFromFunctions("gamestore", mcpFunctions);
+
+            // MCP results go to the model only, so copy the games into the context for the client table.
+            requestKernel.FunctionInvocationFilters.Add(new CaptureGamesFilter(context));
+        }
+
         requestKernel.Plugins.AddFromObject(new GameChangePlugin(games, context), "changes");
 
-        var history = new ChatHistory(SystemPrompt);
+        // The MCP search tool names its paging parameter "page" and returns JSON.
+        var systemPrompt = searchViaMcp
+            ? SystemPrompt.Replace("pageNumber", "page")
+              + "\n        - The search_games tool returns JSON (items, totalCount, page, pageSize). Always pass pageSize=50 when you call it."
+              + "\n        - The admin sees the games in a table next to your reply. Never paste the tool's JSON and never list the games: answer in one or two plain sentences (how many games, or the direct answer to the question)."
+            : SystemPrompt;
+
+        var history = new ChatHistory(systemPrompt);
         foreach (var turn in await conversations.GetRecentAsync(userId, conversationId, ct))
         {
             history.AddUserMessage(turn.User);
@@ -78,9 +144,14 @@ public class AdminAssistantService(
 
         try
         {
-            var chat = requestKernel.GetRequiredService<IChatCompletionService>();
-            var result = await chat.GetChatMessageContentAsync(history, settings, requestKernel, ct);
+            var provider = ResolveProvider();
+            var settingsProvider = CreateSettings(provider);
+
+            var chat = requestKernel.GetRequiredService<IChatCompletionService>(provider);
+            var result = await chat.GetChatMessageContentAsync(history, settingsProvider, requestKernel, ct);
             reply = result.Content ?? "";
+
+            logger.LogInformation("Assistant request answered by {Provider}", provider);
         }
         // The remote API answered with an error status (rate limit, bad key...).
         // Must come before the generic KernelException catch below.

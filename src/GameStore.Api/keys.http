@@ -1,0 +1,16 @@
+﻿@host = http://localhost:5080
+@jwt = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiNjYyN2MxNS0wN2IzLTQyZWMtYWU4OC1lYTdkMjYwYTczZGUiLCJlbWFpbCI6ImFkbWluQGdhbWVzdG9yZS5sb2NhbCIsInVuaXF1ZV9uYW1lIjoiYWRtaW5AZ2FtZXN0b3JlLmxvY2FsIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiQWRtaW4iLCJleHAiOjE3OTUxMDEzOTIsImlzcyI6IkdhbWVTdG9yZSIsImF1ZCI6IkdhbWVTdG9yZSJ9.v-E9HSC33ce6jJ5Gbf3svvFeZY8Jl1R8eL4EuwB3LJo
+
+###  create a full-access key readonly true
+POST {{host}}/api/mcp/keys
+Authorization: Bearer {{jwt}}
+Content-Type: application/json
+
+{ "name": "assistant", "expiresInDays": 90, "readOnly": true }
+
+### create a full-access key readonly false 
+POST {{host}}/api/mcp/keys
+Authorization: Bearer {{jwt}}
+Content-Type: application/json
+
+{ "name": "copilot", "expiresInDays": 90, "readOnly": false }
