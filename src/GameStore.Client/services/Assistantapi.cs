@@ -7,12 +7,21 @@ namespace GameStore.Client.Services;
 public class AssistantApi(HttpClient http)
 {
     public async Task<AssistantResponse> AskAsync(
-        string message, string? conversationId, CancellationToken ct = default)
+        string message, string? conversationId, string? provider, CancellationToken ct = default)
     {
-        using var response = await http.PostAsJsonAsync("api/ai/ask", new { message, conversationId }, ct);
+        using var response = await http.PostAsJsonAsync("api/ai/ask", new { message, conversationId, provider }, ct);
         await ApiErrors.EnsureSuccessAsync(response);
 
         return await response.Content.ReadFromJsonAsync<AssistantResponse>(cancellationToken: ct)
+               ?? throw new ApiException("The server returned an empty response.");
+    }
+
+    public async Task<AssistantProviders> GetProvidersAsync(CancellationToken ct = default)
+    {
+        using var response = await http.GetAsync("api/ai/providers", ct);
+        await ApiErrors.EnsureSuccessAsync(response);
+
+        return await response.Content.ReadFromJsonAsync<AssistantProviders>(cancellationToken: ct)
                ?? throw new ApiException("The server returned an empty response.");
     }
 
@@ -25,13 +34,6 @@ public class AssistantApi(HttpClient http)
 
         using var request = new HttpRequestMessage(
             new HttpMethod(proposal.Method), proposal.Endpoint.TrimStart('/'));
-        
-        if (proposal.Endpoint.Equals("DELETE", StringComparison.OrdinalIgnoreCase))
-        {
-            using var deleteResponse = await http.SendAsync(request, ct);
-            await ApiErrors.EnsureSuccessAsync(deleteResponse);
-            return;
-        }
 
         if (proposal.Payload is not null)
             request.Content = JsonContent.Create(proposal.Payload);

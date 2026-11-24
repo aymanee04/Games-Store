@@ -16,7 +16,6 @@ public class McpApiKey
     /// <summary>SHA-256 of the key, as 64 hex characters.</summary>
     public string KeyHash { get; set; } = null!;
 
-    /// <summary>First characters of the key (not secret enough to use), shown in lists.</summary>
     public string KeyPrefix { get; set; } = null!;
 
     /// <summary>A read-only key can only call read tools; it never gets the Admin role.</summary>

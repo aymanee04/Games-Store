@@ -9,6 +9,7 @@ public class McpAuditEntry
     public long Id { get; set; }
     public DateTime TimestampUtc { get; set; }
 
+    /// has max length 450
     public string? UserId { get; set; }
     public string? UserName { get; set; }
 

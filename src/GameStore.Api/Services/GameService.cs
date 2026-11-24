@@ -44,12 +44,7 @@ public class GameService(AppDbContext db, ILogger<GameService> logger) : IGameSe
             var before = new DateOnly(beforeYear, 1, 1);
             query = query.Where(g => g.ReleaseDate < before);
         }
-
-        if (!string.IsNullOrWhiteSpace(parameters.Search))
-        {
-            var term = parameters.Search.Trim();
-            query = query.Where(g => EF.Functions.ILike(g.Name, $"%{term}%"));   // PostgreSQL case-insensitive LIKE
-        }
+        
 
         var total = await query.CountAsync(ct);
         

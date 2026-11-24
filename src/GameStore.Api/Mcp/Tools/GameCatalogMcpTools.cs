@@ -8,7 +8,6 @@ using ModelContextProtocol.Server;
 
 namespace GameStore.Api.Mcp.Tools;
 
-/// <summary>Read-only tools. Every call goes through the existing services.</summary>
 [McpServerToolType]
 public sealed class GameCatalogMcpTools(
     IGameService games,

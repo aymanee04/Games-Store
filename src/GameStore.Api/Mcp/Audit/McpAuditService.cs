@@ -23,7 +23,7 @@ public class McpAuditService(
         {
             TimestampUtc = time.GetUtcNow().UtcDateTime,
             UserId = record.UserId,
-            UserName = record.UserName,
+            UserName = record.UserName?.Trim().ToLowerInvariant(),
             ApiKeyId = record.ApiKeyId,
             AuthMethod = record.ApiKeyId is null ? "jwt" : "api-key",
             Kind = record.Kind,

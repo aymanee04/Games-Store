@@ -38,7 +38,7 @@ public class McpApiKeyService(
         {
             Id = Guid.NewGuid(),
             UserId = userId,
-            Name = request.Name.Trim(),
+            Name = request.Name.Trim().ToLowerInvariant(),
             KeyHash = Hash(rawKey),
             KeyPrefix = rawKey[..PrefixLength],
             ReadOnly = request.ReadOnly,

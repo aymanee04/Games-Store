@@ -22,7 +22,7 @@ public static class ServiceCollectionExtensions
         var connectionString = configuration["CONN_STRING"]
             ?? throw new InvalidOperationException("CONN_STRING environment variable is missing.");
 
-        services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
+        services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
 
         services.AddScoped<IGameService, GameService>();
         services.AddScoped<IGenreService, GenreService>();

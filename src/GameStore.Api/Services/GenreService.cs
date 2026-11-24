@@ -2,8 +2,8 @@ using GameStore.Api.Data;
 using GameStore.Shared.Dtos;
 using GameStore.Api.Entities;
 using GameStore.Api.Exceptions;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace GameStore.Api.Services;
 
@@ -44,9 +44,8 @@ public class GenreService(AppDbContext db, ILogger<GenreService> logger) : IGenr
             await db.SaveChangesAsync(ct);
         }
         catch (DbUpdateException ex)
-            when (ex.InnerException is PostgresException pgEx
-                  && pgEx.SqlState == PostgresErrorCodes.UniqueViolation
-                  && pgEx.ConstraintName == "IX_Genres_Name")
+            when (ex.InnerException is SqlException sqlEx
+                  && sqlEx.Number is 2601 or 2627) // Unique constraint error number in SQL Server
         {
             throw new ConflictException($"Genre '{name}' already exists.");
         }
@@ -74,9 +73,8 @@ public class GenreService(AppDbContext db, ILogger<GenreService> logger) : IGenr
             await db.SaveChangesAsync(ct);
         }
         catch (DbUpdateException ex)
-            when (ex.InnerException is PostgresException pgEx
-                  && pgEx.SqlState == PostgresErrorCodes.UniqueViolation
-                  && pgEx.ConstraintName == "IX_Genres_Name")
+            when (ex.InnerException is SqlException sqlEx
+                  && sqlEx.Number is 2601 or 2627) // Unique constraint error number in SQL Server
         {
             throw new ConflictException($"Genre '{name}' already exists.");
         }

@@ -10,7 +10,7 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
     {
         builder.HasKey(c => c.Id);
 
-        builder.Property(c => c.UserId).IsRequired();
+        builder.Property(c => c.UserId).IsRequired().HasMaxLength(450);
         builder.Property(c => c.Title).HasMaxLength(100);
         builder.Property(c => c.CreatedAtUtc).IsRequired();
         builder.Property(c => c.UpdatedAtUtc).IsRequired();

@@ -1,4 +1,5 @@
 ﻿@page "/admin/assistant"
+@using System.Diagnostics
 @using System.Globalization
 @using GameStore.Client.Models
 @using GameStore.Client.Services
@@ -49,6 +50,17 @@
             <button type="button" class="primary" @onclick="AskAsync"
                     disabled="@(_busy || _message.Trim().Length < 3)">Ask</button>
             <button type="button" @onclick="NewChat" disabled="@_busy">New chat</button>
+            @if (_providers is { OverrideAllowed: true })
+            {
+                <label for="provider">Provider</label>
+                <select id="provider" @bind="_provider" disabled="@_busy">
+                    <option value="">Default (@_providers.Default)</option>
+                    @foreach (var provider in _providers.Available)
+                    {
+                        <option value="@provider">@provider</option>
+                    }
+                </select>
+            }
             <span class="hint">@_message.Length / 1000</span>
         </div>
 
@@ -56,6 +68,10 @@
         {
             <h2>Reply</h2>
             <p class="reply">@_response.Message</p>
+            @if (_response.AnsweredBy is not null)
+            {
+                <p class="hint">Answered by @_response.AnsweredBy in @_elapsed.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture) s</p>
+            }
 
             @if (_response.Games is { Count: > 0 })
             {
@@ -177,8 +193,27 @@
     private bool _unauthorized;
     private CancellationTokenSource? _cts;
     private string? _conversationId;   // set by the server on the first reply
+    private AssistantProviders? _providers;
+    private string _provider = "";     // "" = the server's default
+    private TimeSpan _elapsed;
+
+    private string? ProviderChoice => string.IsNullOrEmpty(_provider) ? null : _provider;
 
     private int PendingCount => _items.Count(i => i.State != ItemState.Saved);
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Only used to decide whether to show the model dropdown. If it fails (not logged in,
+        // server down) the page simply has no dropdown.
+        try
+        {
+            _providers = await Assistantt.GetProvidersAsync();
+        }
+        catch (Exception)
+        {
+            _providers = null;
+        }
+    }
 
     private async Task AskAsync()
     {
@@ -191,7 +226,9 @@
 
         try
         {
-            var response = await Assistantt.AskAsync(_message.Trim(), _conversationId, cts.Token);
+            var watch = Stopwatch.StartNew();
+            var response = await Assistantt.AskAsync(_message.Trim(), _conversationId, ProviderChoice, cts.Token);
+            _elapsed = watch.Elapsed;
 
             _conversationId = response.ConversationId;
             _response = response;

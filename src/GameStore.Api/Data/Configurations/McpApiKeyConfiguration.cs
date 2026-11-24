@@ -1,6 +1,7 @@
 ﻿using GameStore.Api.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace GameStore.Api.Data.Configurations;
 
@@ -10,8 +11,12 @@ public class McpApiKeyConfiguration : IEntityTypeConfiguration<McpApiKey>
     {
         builder.HasKey(k => k.Id);
 
-        builder.Property(k => k.UserId).IsRequired();
-        builder.Property(k => k.Name).IsRequired().HasMaxLength(100);
+        var lowercaseConverter = new ValueConverter<string, string>(
+            value => value.Trim().ToLowerInvariant(),
+            value => value);
+
+        builder.Property(k => k.UserId).IsRequired().HasMaxLength(450);
+        builder.Property(k => k.Name).IsRequired().HasMaxLength(100).HasConversion(lowercaseConverter);
         builder.Property(k => k.KeyHash).IsRequired().HasMaxLength(64);
         builder.Property(k => k.KeyPrefix).IsRequired().HasMaxLength(16);
         builder.Property(k => k.CreatedAtUtc).IsRequired();

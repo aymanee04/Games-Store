@@ -29,13 +29,13 @@ app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
 {
-    await app.InitialiseDatabaseAsync(); // apply migrations + seed sample data
+    await app.InitialiseDatabaseAsync();
     app.UseSwagger();
     app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "GameStore.Api v1"));
 }
 
 app.MapControllers();
 app.MapGameStoreMcp();
-    app.MapHealthChecks("/health");
+app.MapHealthChecks("/health");
 
 app.Run();

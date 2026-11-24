@@ -1,6 +1,7 @@
 using GameStore.Api.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace GameStore.Api.Data.Configurations;
 
@@ -10,9 +11,14 @@ public class GameConfiguration : IEntityTypeConfiguration<Game>
     {
         builder.HasKey(g => g.Id);
 
+        var lowercaseConverter = new ValueConverter<string, string>(
+            value => value.Trim().ToLowerInvariant(),
+            value => value);
+
         builder.Property(g => g.Name)
             .IsRequired()
-            .HasMaxLength(100);
+            .HasMaxLength(100)
+            .HasConversion(lowercaseConverter);
 
         builder.Property(g => g.Price)
             .HasPrecision(8, 2);

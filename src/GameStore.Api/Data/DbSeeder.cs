@@ -12,24 +12,24 @@ public static class DbSeeder
             return;
         }
 
-        var capcom = new Studio { Name = "Capcom" };
-        var squareEnix = new Studio { Name = "Square Enix" };
-        var eaSports = new Studio { Name = "EA Sports" };
-        var playgroundGames = new Studio { Name = "Playground Games" };
+        var capcom = new Studio { Name = "capcom" };
+        var squareEnix = new Studio { Name = "square enix" };
+        var eaSports = new Studio { Name = "ea sports" };
+        var playgroundGames = new Studio { Name = "playground games" };
 
         db.Studios.AddRange(capcom, squareEnix, eaSports, playgroundGames);
 
-        var fighting = new Genre { Name = "Fighting" };
-        var rpg = new Genre { Name = "Roleplaying" };
-        var sports = new Genre { Name = "Sports" };
-        var racing = new Genre { Name = "Racing" };
+        var fighting = new Genre { Name = "fighting" };
+        var rpg = new Genre { Name = "roleplaying" };
+        var sports = new Genre { Name = "sports" };
+        var racing = new Genre { Name = "racing" };
 
         db.Genres.AddRange(fighting, rpg, sports, racing);
 
         db.Games.AddRange(
             new Game
             {
-                Name = "Street Fighter II",
+                Name = "street fighter ii",
                 Genre = fighting,
                 Studio = capcom,
                 Price = 19.99m,
@@ -37,7 +37,7 @@ public static class DbSeeder
             },
             new Game
             {
-                Name = "Final Fantasy XIV",
+                Name = "final fantasy xiv",
                 Genre = rpg,
                 Studio = squareEnix,
                 Price = 59.99m,
@@ -45,7 +45,7 @@ public static class DbSeeder
             },
             new Game
             {
-                Name = "FIFA 23",
+                Name = "fifa 23",
                 Genre = sports,
                 Studio = eaSports,
                 Price = 69.99m,
@@ -53,7 +53,7 @@ public static class DbSeeder
             },
             new Game
             {
-                Name = "Forza Horizon 5",
+                Name = "forza horizon 5",
                 Genre = racing,
                 Studio = playgroundGames,
                 Price = 59.99m,

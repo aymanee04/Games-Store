@@ -8,7 +8,9 @@ public record AssistantRequest(
     [Required, StringLength(1000, MinimumLength = 3)]
     string Message,
     [StringLength(64)]
-    string? ConversationId = null);
+    string? ConversationId = null,   // omit to start a new chat; reuse the returned id to continue it
+    [StringLength(20)]
+    string? Provider = null);        // "ollama" or "groq". Only honored in Development; omit for the configured default
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum AssistantResponseType
@@ -26,7 +28,8 @@ public record AssistantResponse(
     string Message,
     List<GameDto>? Games = null,
     List<GameProposal>? Proposals = null,
-    string? ConversationId = null);
+    string? ConversationId = null,
+    string? AnsweredBy = null);   // for example "groq/openai/gpt-oss-20b"
 
 /// <summary>
 /// Everything the client needs to confirm a change through the EXISTING endpoints:
@@ -34,8 +37,8 @@ public record AssistantResponse(
 /// The assistant itself never writes to the database.
 /// </summary>
 public record GameProposal(
-    string Action,                 // "create" | "update" | "delete"
-    string Method,                 // "POST" | "PUT" | "DELETE"
+    string Action,                 // "create" | "update"
+    string Method,                 // "POST" | "PUT"
     string Endpoint,               // "/api/games" | "/api/games/{id}"
     int? GameId,
     GameProposalPayload? Payload,
@@ -49,3 +52,6 @@ public record GameProposalPayload(
     DateOnly ReleaseDate);
 
 public record ProposedChange(string Field, string? Before, string After);
+
+/// <summary>What the page needs to show the provider switch.</summary>
+public record AssistantProviderInfo(string Default, bool OverrideAllowed, List<string> Available);

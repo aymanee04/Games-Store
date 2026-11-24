@@ -12,7 +12,7 @@ public class ChatMessageConfiguration : IEntityTypeConfiguration<ChatMessage>
 
         builder.Property(m => m.Role).IsRequired().HasMaxLength(16);
         builder.Property(m => m.Content).IsRequired().HasMaxLength(8000);
-        builder.Property(m => m.ProposalsJson).HasColumnType("jsonb");
+        builder.Property(m => m.ProposalsJson).HasColumnType("nvarchar(max)");
         builder.Property(m => m.CreatedAtUtc).IsRequired();
 
         builder.HasOne(m => m.Conversation)

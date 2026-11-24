@@ -9,7 +9,11 @@ public record AssistantResponse(
     string Message,
     List<GameDto>? Games,
     List<GameProposal>? Proposals,
-    string? ConversationId);   // send it back with the next request to continue the chat
+    string? ConversationId,    // send it back with the next request to continue the chat
+    string? AnsweredBy);       // for example "groq/openai/gpt-oss-20b"
+
+/// <summary>Which provider answers by default, and whether this server lets the page choose.</summary>
+public record AssistantProviders(string Default, bool OverrideAllowed, List<string> Available);
 
 /// <summary>
 /// One change the assistant prepared. Nothing is saved until the admin confirms:

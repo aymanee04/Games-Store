@@ -23,10 +23,13 @@ public class AuthService(
 
         try
         {
+            var username = request.UserName.Trim().ToLowerInvariant();
+            var email = request.Email.Trim().ToLowerInvariant();
+
             var user = new ApplicationUser
             {
-                UserName = request.UserName,
-                Email = request.Email
+                UserName = username,
+                Email = email
             };
             
             var result = await userManager.CreateAsync(user, request.Password);
@@ -83,7 +86,8 @@ public class AuthService(
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken ct)
     {
-        var user = await userManager.FindByEmailAsync(request.Email);
+        var email = request.Email.Trim().ToLowerInvariant();
+        var user = await userManager.FindByEmailAsync(email);
 
         if (user is null)
         {

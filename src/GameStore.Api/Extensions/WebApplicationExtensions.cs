@@ -31,7 +31,7 @@ public static class WebApplicationExtensions
             }
         }
         
-        var seedEmail = app.Configuration["SeedAdmin:Email"];
+        var seedEmail = app.Configuration["SeedAdmin:Email"]?.Trim().ToLowerInvariant();
         var seedPassword = app.Configuration["SeedAdmin:Password"];
 
         if (string.IsNullOrWhiteSpace(seedEmail) || string.IsNullOrWhiteSpace(seedPassword))

@@ -3,7 +3,7 @@ using GameStore.Shared.Dtos;
 using GameStore.Api.Entities;
 using GameStore.Api.Exceptions;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
+using Microsoft.Data.SqlClient;
 
 namespace GameStore.Api.Services;
 
@@ -42,9 +42,8 @@ public class StudioService(AppDbContext db, ILogger<StudioService> logger) : ISt
             await db.SaveChangesAsync(ct);
         }
         catch (DbUpdateException ex)
-            when (ex.InnerException is PostgresException pgEx
-                  && pgEx.SqlState == PostgresErrorCodes.UniqueViolation
-                  && pgEx.ConstraintName == "IX_Studios_Name")
+            when (ex.InnerException is SqlException sqlEx
+                  && sqlEx.Number is 2601 or 2627)
         {
             throw new ConflictException($"Studio '{name}' already exists.");
         }
@@ -74,9 +73,8 @@ public class StudioService(AppDbContext db, ILogger<StudioService> logger) : ISt
             logger.LogInformation("Updated Studio {StudioId} ({StudioName})", studio.Id, studio.Name);
         }
         catch (DbUpdateException ex)
-            when (ex.InnerException is PostgresException pgEx
-                  && pgEx.SqlState == PostgresErrorCodes.UniqueViolation
-                  && pgEx.ConstraintName == "IX_Studios_Name")
+            when (ex.InnerException is SqlException sqlEx
+                  && sqlEx.Number is 2601 or 2627)
         {
             throw new ConflictException($"Studio '{name}' already exists.");
         }

@@ -12,7 +12,7 @@ public sealed class AssistantMcpOptions
     public string Endpoint { get; set; } = "http://localhost:5080/mcp";
 
     /// An MCP API key. Use a READ-ONLY key: the assistant must never be able to write over MCP.
-    public string ApiKey { get; set; } = "gsmcp_ShQXup1yn4LDdiBYbxJnctQ6TgVqfP4Vkp0L0EOaunU";
+    public string ApiKey { get; set; } = "";
 
     /// Only these tools are ever handed to the model, whatever the server offers. A second layer
     /// next to the read-only key: even if the key were too powerful, the write tools stay unused.

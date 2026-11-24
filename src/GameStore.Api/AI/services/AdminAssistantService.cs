@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Diagnostics;
+using System.Text.Json;
 using GameStore.Api.AI.DTOs;
 using GameStore.Api.AI.Interfaces;
 using GameStore.Api.AI.McpTools;
@@ -18,14 +19,19 @@ public class AdminAssistantService(
     IStudioService studioService,
     IMcpToolProvider mcpTools,
     IConversationStore conversations,
-    ILogger<AdminAssistantService> logger,
-    IConfiguration configuration) : IAdminAssistantService
+    IConfiguration configuration,
+    IHostEnvironment environment,
+    ILogger<AdminAssistantService> logger) : IAdminAssistantService
 {
+    // The chat services registered in AddKernel(), by service id.
+    private static readonly string[] Providers = ["ollama", "groq"];
+
     private const string SystemPrompt = """
         You are the admin assistant of a game store. Answer in the language the admin writes in.
         Use the tools to look up data and to prepare changes. Never answer from memory.
 
         Rules:
+        - Don't answer about topics outside the gamestore. If the admin asks about them, say you cannot answer.
         - To show or find games, call search_games. Report only what the tool returned.
         - The admin sees search results as a table automatically. Never list the games in your
           reply: answer the question directly and briefly (how many, and any calculation the
@@ -53,45 +59,19 @@ public class AdminAssistantService(
         - Keep answers short.
         """;
 
-    private static readonly string[] Providers = ["ollama", "groq"];
+    public AssistantProviderInfo GetProviderInfo() => new(
+        Default: ResolveProvider(null),
+        OverrideAllowed: environment.IsDevelopment(),
+        Available: [.. Providers]);
 
-    private string ResolveProvider(string? requested = null)
-    {
-        // Your json uses "Ai", so prefer this exact path
-        var configured = configuration["Ai:Provider"]
-                         ?? throw new InvalidOperationException("Ai:Provider is missing.");
-
-        var provider = (requested ?? configured).Trim().ToLowerInvariant();
-
-        return Providers.Contains(provider)
-            ? provider
-            : throw new BadRequestException(
-                $"Unknown AI provider '{provider}'. Use one of: {string.Join(", ", Providers)}.");
-    }
-
-    private static PromptExecutionSettings CreateSettings(string provider) => new()
-    {
-        FunctionChoiceBehavior = FunctionChoiceBehavior.Auto(),
-        ExtensionData = provider == "ollama"
-            ? new Dictionary<string, object>
-            {
-                ["temperature"] = 0,
-                ["num_ctx"] = 4096,
-                ["keep_alive"] = "30m"
-            }
-            : new Dictionary<string, object>
-            {
-                ["temperature"] = 0
-            }
-    };
-    
     public async Task<AssistantResponse> HandleAsync(
-        string message, string userId, string? conversationId, CancellationToken ct)
+        string message, string userId, string? conversationId, string? provider, CancellationToken ct)
     {
+        var providerId = ResolveProvider(provider);
+
         var genres = (await genreService.GetAllAsync(ct)).Select(g => (g.Id, g.Name)).ToList();
         var studios = (await studioService.GetAllAsync(ct)).Select(s => (s.Id, s.Name)).ToList();
         var context = new AssistantContext(genres, studios);
-        
 
         var requestKernel = kernel.Clone();
 
@@ -135,23 +115,16 @@ public class AdminAssistantService(
 
         history.AddUserMessage(message.Trim());
 
-        var settings = new PromptExecutionSettings
-        {
-            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
-        };
+        var settings = CreateSettings(providerId);
 
         string reply;
+        var watch = Stopwatch.StartNew();
 
         try
         {
-            var provider = ResolveProvider();
-            var settingsProvider = CreateSettings(provider);
-
-            var chat = requestKernel.GetRequiredService<IChatCompletionService>(provider);
-            var result = await chat.GetChatMessageContentAsync(history, settingsProvider, requestKernel, ct);
+            var chat = requestKernel.GetRequiredService<IChatCompletionService>(providerId);
+            var result = await chat.GetChatMessageContentAsync(history, settings, requestKernel, ct);
             reply = result.Content ?? "";
-
-            logger.LogInformation("Assistant request answered by {Provider}", provider);
         }
         // The remote API answered with an error status (rate limit, bad key...).
         // Must come before the generic KernelException catch below.
@@ -213,6 +186,52 @@ public class AdminAssistantService(
         var savedId = await conversations.AddAsync(
             userId, conversationId, new ChatTurn(message.Trim(), response.Message), proposalsJson, ct);
 
-        return response with { ConversationId = savedId };
+        var answeredBy = $"{providerId}/{ModelOf(providerId)}";
+
+        logger.LogInformation(
+            "Assistant request answered by {AnsweredBy} in {Seconds:F1}s", answeredBy, watch.Elapsed.TotalSeconds);
+
+        return response with { ConversationId = savedId, AnsweredBy = answeredBy };
     }
+
+    // ---------------------------------------------------------------- provider switch
+    // AI:Provider is the default. A client may choose another provider only in Development, so
+    // nobody can pick a model in production. The result is always one of the registered ids.
+    private string ResolveProvider(string? requested)
+    {
+        var configured = (configuration["AI:Provider"] ?? "").Trim().ToLowerInvariant();
+
+        if (!Providers.Contains(configured))
+            throw new InvalidOperationException(
+                $"AI:Provider must be one of: {string.Join(", ", Providers)} (it is '{configured}').");
+
+        if (!environment.IsDevelopment() || string.IsNullOrWhiteSpace(requested))
+            return configured;
+
+        var wanted = requested.Trim().ToLowerInvariant();
+
+        return Providers.Contains(wanted)
+            ? wanted
+            : throw new BadRequestException(
+                $"Unknown AI provider '{requested}'. Use one of: {string.Join(", ", Providers)}.");
+    }
+
+    private string? ModelOf(string providerId) =>
+        configuration[providerId == "groq" ? "GROQ_MODEL" : "OLLAMA_MODEL"];
+
+    // Tool calling and temperature 0 for both. Ollama also gets an explicit context size and
+    // keep-alive: otherwise it may silently use a small default context that cuts the tools or
+    // the history. Semantic Kernel passes these keys through to the Ollama request.
+    private static PromptExecutionSettings CreateSettings(string providerId) => new()
+    {
+        FunctionChoiceBehavior = FunctionChoiceBehavior.Auto(),
+        ExtensionData = providerId == "ollama"
+            ? new Dictionary<string, object>
+            {
+                ["temperature"] = 0,
+                ["num_ctx"] = 4096,
+                ["keep_alive"] = "30m"
+            }
+            : new Dictionary<string, object> { ["temperature"] = 0 }
+    };
 }

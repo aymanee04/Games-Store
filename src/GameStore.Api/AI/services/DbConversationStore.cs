@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace GameStore.Api.AI.services;
 
 /// <summary>
-/// Chat history in PostgreSQL. The full text is stored; only the last few exchanges are
+/// Chat history. The full text is stored; only the last few exchanges are
 /// sent back to the model, shortened (every token is sent again with each request).
 /// Every query filters by user id, so a conversation id alone never exposes someone's chat.
 /// </summary>
