@@ -35,8 +35,8 @@ public static class ServiceCollectionExtensions
         var ollamaHttpClient = new HttpClient
         {
             BaseAddress = new Uri(
-                configuration["Ai:Ollama:BaseUrl"]
-                ?? "http://localhost:11434"),
+                configuration["OLLLAMA_BASE_URL"]
+                ?? throw new InvalidOperationException("OLLLAMA_BASE_URL is missing.")),
             Timeout = TimeSpan.FromMinutes(6)
         };
 
